@@ -3,6 +3,7 @@ import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { CartProvider } from "@/context/CartContext";
+import { Toaster } from "react-hot-toast";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -20,6 +21,7 @@ export default function RootLayout({ children }) {
       <body className={`${geistSans.className} antialiased bg-white`}>
         {/* نغلف التطبيق بالـ CartProvider ليعمل في كل الصفحات */}
         <CartProvider>
+          <Toaster position="bottom-center" reverseOrder={false} />
           <Navbar />
           {/* نضع pt-20 لتعويض ارتفاع الـ Navbar الـ Fixed */}
           <main className="min-h-screen pt-20">{children}</main>

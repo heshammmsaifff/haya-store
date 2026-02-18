@@ -7,28 +7,42 @@ import {
   FiCamera,
   FiX,
   FiTag,
-  FiChevronDown,
-  FiChevronUp,
   FiEdit3,
+  FiImage,
 } from "react-icons/fi";
 
-// دالة مساعدة لتحديد لون النص (أسود أو أبيض) بناءً على لون الخلفية
-function getContrastColor(hexcolor) {
-  if (!hexcolor) return "black";
-  const r = parseInt(hexcolor.substr(1, 2), 16);
-  const g = parseInt(hexcolor.substr(3, 2), 16);
-  const b = parseInt(hexcolor.substr(5, 2), 16);
-  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
-  return yiq >= 128 ? "black" : "white";
-}
+const TRENDING_COLORS = [
+  { name: "أسود", value: "Black", hex: "#000000" },
+  { name: "أبيض", value: "White", hex: "#FFFFFF" },
+  { name: "أوف وايت", value: "Off-White", hex: "#F5F5DC" },
+  { name: "بيج / نود", value: "Beige", hex: "#D2B48C" },
+  { name: "كشمير", value: "Cashmere", hex: "#D4A5A5" },
+  { name: "موف / لافندر", value: "Lavender", hex: "#E6E6FA" },
+  { name: "كحلي", value: "Navy Blue", hex: "#000080" },
+  { name: "سماوي", hex: "#87CEEB", value: "Sky Blue" },
+  { name: "زيتي", value: "Olive Green", hex: "#556B2F" },
+  { name: "مينت جرين", value: "Mint Green", hex: "#98FF98" },
+  { name: "رمادي", value: "Grey", hex: "#808080" },
+  { name: "فوشيا", value: "Fuchsia", hex: "#FF00FF" },
+  { name: "أحمر زاهي", value: "Bright Red", hex: "#FF0000" },
+  { name: "نبيتي", value: "Burgundy", hex: "#800000" },
+  { name: "مستردة", value: "Mustard", hex: "#FFDB58" },
+  { name: "بني شيكولاتة", value: "Chocolate Brown", hex: "#3E1B0F" },
+  { name: "مرجاني (كورال)", value: "Coral", hex: "#FF7F50" },
+  { name: "بستاج", value: "Pistachio", hex: "#93C572" },
+  { name: "تراكوتا", value: "Terracotta", hex: "#E2725B" },
+  { name: "ليلكي", value: "Lilac", hex: "#C8A2C8" },
+];
 
 export default function AddProductPage() {
   const [loading, setLoading] = useState(false);
-  const [imagesData, setImagesData] = useState([]);
+  const [colorGroups, setColorGroups] = useState([]);
   const [subCategories, setSubCategories] = useState([]);
   const [productsBySub, setProductsBySub] = useState({});
-  const [expandedSub, setExpandedSub] = useState(null);
   const [editingId, setEditingId] = useState(null);
+  const [variants, setVariants] = useState([
+    { color: "", color_code: "", size: "M", is_available: true },
+  ]);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -40,10 +54,6 @@ export default function AddProductPage() {
     discount_value: 0,
     sub_category_id: "",
   });
-
-  const [variants, setVariants] = useState([
-    { color: "", size: "M", stock: 1 },
-  ]);
 
   useEffect(() => {
     fetchData();
@@ -59,26 +69,13 @@ export default function AddProductPage() {
       .from("products")
       .select("*, sub_categories(name)");
     const grouped = prods?.reduce((acc, curr) => {
-      if (!acc[curr.sub_category_id]) acc[curr.sub_category_id] = [];
-      acc[curr.sub_category_id].push(curr);
+      const catId = curr.sub_category_id || "unassigned";
+      if (!acc[catId]) acc[catId] = [];
+      acc[catId].push(curr);
       return acc;
     }, {});
     setProductsBySub(grouped || {});
   }
-
-  // بدلاً من الاعتماد على imagesData فقط، اعتمد على الألوان المدخلة فعلياً في الصور
-  const activeColors = Array.from(
-    new Set(imagesData.map((img) => img.color)),
-  ).filter(Boolean);
-
-  const calculateFinalPrice = () => {
-    const price = parseFloat(formData.base_price) || 0;
-    const val = parseFloat(formData.discount_value) || 0;
-    if (formData.discount_type === "percentage")
-      return price - (price * val) / 100;
-    if (formData.discount_type === "fixed") return price - val;
-    return price;
-  };
 
   const compressImage = async (file) => {
     return new Promise((resolve) => {
@@ -90,66 +87,148 @@ export default function AddProductPage() {
         img.onload = () => {
           const canvas = document.createElement("canvas");
           const ctx = canvas.getContext("2d");
-          canvas.width = img.width;
-          canvas.height = img.height;
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          canvas.toBlob((blob) => resolve(blob), "image/webp", 0.6);
+          const MAX_WIDTH = 1000;
+          let width = img.width;
+          let height = img.height;
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+          canvas.width = width;
+          canvas.height = height;
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob((blob) => resolve(blob), "image/webp", 0.7);
         };
       };
     });
   };
 
-  const uploadImagesAndGetUrls = async () => {
-    const uploadedUrls = [];
-    for (const item of imagesData) {
-      if (typeof item.file === "string" && item.file.startsWith("http")) {
-        uploadedUrls.push(item.file);
-        continue;
-      }
-      const compressedBlob = await compressImage(item.file);
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.webp`;
-      const { data } = await supabase.storage
-        .from("product-images")
-        .upload(fileName, compressedBlob);
-      if (data) {
-        const { data: urlData } = supabase.storage
-          .from("product-images")
-          .getPublicUrl(fileName);
-        uploadedUrls.push(urlData.publicUrl);
-      }
-    }
-    return uploadedUrls;
-  };
+  const handleEdit = async (product) => {
+    setEditingId(product.id);
+    setLoading(true);
 
-  const handleDelete = async (id) => {
-    if (confirm("هل أنت متأكد من حذف هذا الموديل؟")) {
-      const { error } = await supabase.from("products").delete().eq("id", id);
-      if (error) alert("خطأ في الحذف");
-      else fetchData(); // إعادة تحديث البيانات بعد الحذف
+    try {
+      // 1. جلب المقاسات
+      const { data: dbVariants } = await supabase
+        .from("product_variants")
+        .select("*")
+        .eq("product_id", product.id);
+
+      // 2. تحديث بيانات الفورم
+      setFormData({
+        name: product.name,
+        description: product.description,
+        material: product.material,
+        care_instructions: product.care_instructions,
+        base_price: product.base_price,
+        discount_type: product.discount_type,
+        discount_value: product.discount_value,
+        sub_category_id: product.sub_category_id,
+      });
+
+      // 3. معالجة الصور بنظام JSONB (التحكم الكامل)
+      if (Array.isArray(product.images)) {
+        // التحقق هل البيانات قديمة (Array of strings) أم جديدة (Array of objects)
+        const isNewSystem =
+          typeof product.images[0] === "object" && product.images[0] !== null;
+
+        if (isNewSystem) {
+          setColorGroups(
+            product.images.map((group) => ({
+              colorName: group.color,
+              colorHex: group.colorHex,
+              previews: group.urls || [],
+              files: group.urls || [],
+            })),
+          );
+        } else {
+          // التعامل مع البيانات القديمة لو وجدت
+          setColorGroups([
+            {
+              colorName: "صور سابقة",
+              colorHex: "#000000",
+              previews: product.images,
+              files: product.images,
+            },
+          ]);
+        }
+      } else {
+        setColorGroups([]);
+      }
+
+      // 4. تحديث المقاسات
+      if (dbVariants) {
+        setVariants(
+          dbVariants.map((v) => ({
+            color: v.color,
+            color_code: v.color_code,
+            size: v.size,
+            is_available: v.is_available, // بنجيب الحالة من الداتابيز
+          })),
+        );
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!formData.sub_category_id) return alert("اختر الفئة");
-    setLoading(true);
-    try {
-      const imageUrls = await uploadImagesAndGetUrls();
-      let productId = editingId;
+    if (!formData.sub_category_id) return alert("الرجاء اختيار الفئة");
+    if (colorGroups.length === 0) return alert("الرجاء إضافة لون وصور");
 
-      // داخل handleSave قبل الـ update
+    setLoading(true);
+
+    try {
+      const imagesJson = [];
+
+      // معالجة كل مجموعة ألوان على حدة
+      for (const group of colorGroups) {
+        const uploadedUrls = [];
+        for (const file of group.files) {
+          // لو الصورة مرفوعة أصلاً (رابط)
+          if (typeof file === "string" && file.startsWith("http")) {
+            uploadedUrls.push(file);
+          } else {
+            // لو ملف جديد محتاج ضغط ورفع
+            const compressed = await compressImage(file);
+            const fileName = `products/${Date.now()}-${Math.random().toString(36).substring(7)}.webp`;
+            const { error: uploadError } = await supabase.storage
+              .from("product-images")
+              .upload(fileName, compressed);
+
+            if (uploadError) throw uploadError;
+
+            const { data: urlData } = supabase.storage
+              .from("product-images")
+              .getPublicUrl(fileName);
+            uploadedUrls.push(urlData.publicUrl);
+          }
+        }
+
+        imagesJson.push({
+          color: group.colorName,
+          colorHex: group.colorHex,
+          urls: uploadedUrls,
+        });
+      }
+
       const productPayload = {
         name: formData.name,
         description: formData.description,
         material: formData.material,
         care_instructions: formData.care_instructions,
-        base_price: parseFloat(formData.base_price),
-        discount_type: formData.discount_type,
-        discount_value: parseFloat(formData.discount_value),
         sub_category_id: formData.sub_category_id,
-        images: imageUrls,
+        base_price: parseFloat(formData.base_price) || 0,
+        discount_type: formData.discount_type,
+        discount_value: parseFloat(formData.discount_value) || 0,
+        images: imagesJson, // حفظ كـ JSONB
       };
 
+      let productId = editingId;
       if (editingId) {
         await supabase
           .from("products")
@@ -173,19 +252,31 @@ export default function AddProductPage() {
       const variantsToInsert = variants.map((v) => ({
         product_id: productId,
         color: v.color,
-        size: v.size,
-        stock: parseInt(v.stock) || 0,
-        is_available: parseInt(v.stock) > 0,
+        color_code: v.color_code || "#000000",
+        size: v.size || "M",
+        is_available: v.is_available, // بنرفع الحالة مباشرة
+        stock: v.is_available ? 99 : 0, // "حيلة" تقنية: بنحط رقم كبير لو متاح عشان السيستم ميعتبروش خلصان
       }));
+
       await supabase.from("product_variants").insert(variantsToInsert);
 
-      alert("تم الحفظ بنجاح!");
+      alert("تم الحفظ بنجاح بنظام التحكم الكامل!");
       resetForm();
       fetchData();
     } catch (err) {
-      alert(err.message);
+      alert("خطأ: " + err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm("هل أنت متأكد من حذف هذا المنتج؟")) return;
+    try {
+      await supabase.from("products").delete().eq("id", id);
+      fetchData();
+    } catch (err) {
+      alert("خطأ في الحذف");
     }
   };
 
@@ -201,50 +292,27 @@ export default function AddProductPage() {
       discount_value: 0,
       sub_category_id: "",
     });
-    setImagesData([]);
-    setVariants([{ color: "", size: "M", stock: 1 }]);
+    setColorGroups([]);
+    setVariants([{ color: "", color_code: "", size: "M", stock: 1 }]);
   };
 
-  const startEdit = async (prod) => {
-    setEditingId(prod.id);
+  const addColorGroup = () => {
+    setColorGroups([
+      ...colorGroups,
+      { colorName: "", colorHex: "", previews: [], files: [] },
+    ]);
+  };
 
-    // 1. تنظيف البيانات الأساسية
-    const { sub_categories, ...cleanData } = prod;
-    setFormData(cleanData);
-
-    // 2. جلب المتغيرات (المقاسات والألوان) أولاً
-    const { data: vData, error } = await supabase
-      .from("product_variants")
-      .select("*")
-      .eq("product_id", prod.id);
-
-    if (error) {
-      console.error("Error fetching variants:", error);
-      return;
-    }
-
-    // 3. استخراج الألوان الفريدة من المتغيرات
-    // هذا سيجعل activeColors تحتوي على الألوان الصحيحة فوراً
-    const uniqueColorsFromVariants = Array.from(
-      new Set(vData.map((v) => v.color)),
-    );
-
-    // 4. تحديث الصور
-    // سنقوم بتوزيع الألوان الموجودة على الصور المتاحة
-    const mappedImages = prod.images.map((url, index) => ({
-      file: url,
-      preview: url,
-      // إذا كان لدينا ألوان من المتغيرات، نربطها بالصور بالترتيب، وإلا نضع أسود
-      color:
-        uniqueColorsFromVariants[index] ||
-        uniqueColorsFromVariants[0] ||
-        "#000000",
-    }));
-
-    setImagesData(mappedImages);
-    setVariants(vData || []);
-
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  const handleImageUpload = (groupIndex, files) => {
+    const newGroups = [...colorGroups];
+    const newFiles = Array.from(files);
+    const newPreviews = newFiles.map((f) => URL.createObjectURL(f));
+    newGroups[groupIndex].files = [...newGroups[groupIndex].files, ...newFiles];
+    newGroups[groupIndex].previews = [
+      ...newGroups[groupIndex].previews,
+      ...newPreviews,
+    ];
+    setColorGroups(newGroups);
   };
 
   return (
@@ -252,245 +320,181 @@ export default function AddProductPage() {
       className="p-8 bg-white min-h-screen text-right text-black font-sans"
       dir="rtl"
     >
-      <h1 className="text-3xl font-black mb-8 border-b-4 border-black pb-4 flex justify-between italic">
-        <span>HAYA STORE | {editingId ? "تعديل موديل" : "إضافة موديل"}</span>
-        {editingId && (
-          <button
-            onClick={resetForm}
-            className="text-sm bg-red-500 text-white px-4 py-1 rounded border-2 border-black shadow-[2px_2px_0_0_rgba(0,0,0,1)]"
-          >
-            إلغاء التعديل
-          </button>
-        )}
-      </h1>
+      <header className="mb-10 border-b-8 border-black pb-6">
+        <h1 className="text-5xl font-black italic uppercase tracking-tighter">
+          HAYA ADMIN
+        </h1>
+        <p className="font-bold text-gray-500 italic">
+          نظام التحكم الكامل بالألوان والصور (JSON System)
+        </p>
+      </header>
 
-      <form onSubmit={handleSave} className="space-y-10 mb-20">
-        {/* 1. الصور والألوان */}
-        <div className="bg-gray-50 p-6 rounded-xl border-2 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-          <h3 className="font-bold mb-6 text-xl flex items-center gap-2">
-            <FiCamera /> 1. صور الألوان
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            {imagesData.map((img, i) => (
-              <div
-                key={i}
-                className="relative border-2 border-black rounded-lg p-1 bg-white"
+      <form
+        onSubmit={handleSave}
+        className="grid grid-cols-1 lg:grid-cols-12 gap-10"
+      >
+        <div className="lg:col-span-6 space-y-8">
+          <section className="bg-white p-6 border-4 border-black shadow-[8px_8px_0_0_rgba(0,0,0,1)]">
+            <div className="flex justify-between items-center mb-6 border-b-2 border-black pb-2">
+              <h3 className="text-xl font-black flex items-center gap-2">
+                <FiCamera /> مجموعات الصور والألوان
+              </h3>
+              <button
+                type="button"
+                onClick={addColorGroup}
+                className="bg-black text-white px-4 py-1 text-sm font-bold flex items-center gap-2"
               >
-                <img
-                  src={img.preview}
-                  className="aspect-[3/4] object-cover rounded"
-                />
+                <FiPlus /> إضافة لون جديد
+              </button>
+            </div>
+
+            {colorGroups.map((group, gIdx) => (
+              <div
+                key={gIdx}
+                className="mb-8 p-4 border-2 border-black bg-gray-50 relative"
+              >
                 <button
                   type="button"
                   onClick={() =>
-                    setImagesData(imagesData.filter((_, idx) => idx !== i))
+                    setColorGroups(colorGroups.filter((_, i) => i !== gIdx))
                   }
-                  className="absolute -top-2 -left-2 bg-red-600 text-white rounded-full p-1 border-2 border-black shadow-md"
+                  className="absolute -top-3 -left-3 bg-red-500 text-white p-1 border-2 border-black"
                 >
                   <FiX />
                 </button>
-                <div className="flex items-center gap-2 mt-2 bg-gray-100 p-1 rounded">
-                  <input
-                    type="color"
-                    className="w-8 h-8 border-2 border-black rounded cursor-pointer"
-                    value={img.color || "#000000"}
-                    onChange={(e) => {
-                      const n = [...imagesData];
-                      n[i].color = e.target.value;
-                      setImagesData(n);
-                    }}
-                  />
-                  <span className="text-[10px] font-black uppercase font-mono">
-                    {img.color || "#000"}
-                  </span>
-                </div>
-              </div>
-            ))}
-            <label className="border-4 border-dashed border-black rounded-lg flex flex-col items-center justify-center cursor-pointer aspect-[3/4] hover:bg-yellow-100 transition-colors">
-              <FiPlus size={30} />
-              <span className="font-bold text-sm">صورة جديدة</span>
-              <input
-                type="file"
-                multiple
-                onChange={(e) =>
-                  setImagesData([
-                    ...imagesData,
-                    ...Array.from(e.target.files).map((f) => ({
-                      file: f,
-                      preview: URL.createObjectURL(f),
-                      color: "",
-                    })),
-                  ])
-                }
-                className="hidden"
-                accept="image/*"
-              />
-            </label>
-          </div>
-        </div>
 
-        {/* 2. البيانات والأسعار */}
-        <div className="bg-gray-50 p-6 rounded-xl border-2 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-          <h3 className="font-bold mb-6 text-xl flex items-center gap-2">
-            <FiTag /> 2. البيانات والأسعار
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="flex flex-col gap-1">
-              <label className="font-bold text-sm">الفئة الفرعية</label>
-              <select
-                required
-                className="border-2 border-black p-2 rounded-lg font-bold bg-white"
-                value={formData.sub_category_id}
-                onChange={(e) =>
-                  setFormData({ ...formData, sub_category_id: e.target.value })
-                }
-              >
-                <option value="">-- اختر --</option>
-                {subCategories.map((sub) => (
-                  <option key={sub.id} value={sub.id}>
-                    {sub.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <Input
-              label="اسم الموديل"
-              value={formData.name}
-              onChange={(v) => setFormData({ ...formData, name: v })}
-            />
-            <Input
-              label="السعر الأصلي (EGP)"
-              type="number"
-              value={formData.base_price}
-              onChange={(v) => setFormData({ ...formData, base_price: v })}
-            />
-            <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4 bg-yellow-100 p-4 border-2 border-black rounded-lg">
-              <div>
-                <label className="font-black text-xs block mb-1">
-                  نوع الخصم
-                </label>
-                <div className="flex gap-2">
-                  {["none", "percentage", "fixed"].map((type) => (
-                    <button
-                      key={type}
-                      type="button"
-                      onClick={() =>
-                        setFormData({
-                          ...formData,
-                          discount_type: type,
-                          discount_value: 0,
-                        })
-                      }
-                      className={`flex-1 py-2 border-2 border-black font-bold text-xs rounded transition-all ${formData.discount_type === type ? "bg-black text-white shadow-none" : "bg-white shadow-[2px_2px_0_0_rgba(0,0,0,1)]"}`}
-                    >
-                      {type === "none"
-                        ? "بدون"
-                        : type === "percentage"
-                          ? "%"
-                          : "مبلغ"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {formData.discount_type !== "none" && (
-                <Input
-                  label={
-                    formData.discount_type === "percentage"
-                      ? "نسبة الخصم %"
-                      : "قيمة الخصم (جنية)"
-                  }
-                  type="number"
-                  value={formData.discount_value}
-                  onChange={(v) =>
-                    setFormData({ ...formData, discount_value: v })
-                  }
-                />
-              )}
-              <div className="flex flex-col justify-end">
-                <div className="bg-white border-2 border-black p-2 rounded flex justify-between items-center shadow-[4px_4px_0_0_rgba(0,0,0,1)]">
-                  <span className="font-bold text-xs italic text-gray-500">
-                    السعر النهائي:
-                  </span>
-                  <span className="font-black text-xl text-green-600">
-                    {calculateFinalPrice()} EGP
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 3. المقاسات والكميات */}
-        <div className="bg-gray-50 p-6 rounded-xl border-2 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="font-bold text-xl underline">
-              3. المقاسات والمخزون
-            </h3>
-            <button
-              type="button"
-              onClick={() =>
-                setVariants([...variants, { color: "", size: "M", stock: 1 }])
-              }
-              className="bg-black text-white px-4 py-2 rounded-lg flex items-center gap-2 font-bold shadow-[4px_4px_0_0_rgba(255,255,255,0.2)] active:shadow-none transition-all"
-            >
-              <FiPlus /> إضافة مقاس
-            </button>
-          </div>
-          <div className="space-y-3">
-            {variants.map((v, idx) => (
-              <div
-                key={idx}
-                className="flex flex-wrap gap-4 items-end bg-white p-4 border-2 border-black rounded-lg shadow-[4px_4px_0_0_rgba(0,0,0,1)]"
-              >
-                {/* تعديل الـ Select المطلوب */}
-                <div className="flex-1 min-w-[160px]">
-                  <label className="text-xs font-bold block mb-1">
-                    اللون المختار
-                  </label>
-                  <div
-                    className="flex items-center gap-2 border-2 border-black p-1 rounded-md transition-all"
-                    style={{
-                      backgroundColor: v.color ? `${v.color}22` : "#fff",
-                    }}
-                  >
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-xs font-black mb-1">
+                      اختر اللون:
+                    </label>
                     <select
-                      required
-                      className="flex-1 bg-transparent font-black outline-none cursor-pointer text-sm"
-                      value={v.color}
+                      className="w-full border-2 border-black p-2 bg-white font-bold"
+                      value={group.colorName} // نستخدم اسم اللون فقط كقيمة مخزنة
                       onChange={(e) => {
-                        const n = [...variants];
-                        n[idx].color = e.target.value;
-                        setVariants(n);
+                        const selectedValue = e.target.value;
+                        if (!selectedValue) return;
+
+                        const selectedColor = TRENDING_COLORS.find(
+                          (c) => c.value === selectedValue,
+                        );
+
+                        if (selectedColor) {
+                          const n = [...colorGroups];
+                          n[gIdx].colorName = selectedColor.value;
+                          n[gIdx].colorHex = selectedColor.hex;
+                          setColorGroups(n);
+                        }
                       }}
-                      style={{ color: v.color || "black" }}
                     >
-                      <option value="" className="bg-white text-black">
-                        اختر لوناً
-                      </option>
-                      {activeColors.map((hex) => (
-                        <option
-                          key={hex}
-                          value={hex}
-                          style={{
-                            backgroundColor: hex,
-                            color: getContrastColor(hex),
-                          }}
-                        >
-                          {hex}
+                      <option value="">-- اختر --</option>
+                      {TRENDING_COLORS.map((c) => (
+                        <option key={c.hex} value={c.value}>
+                          {" "}
+                          {/* جعلنا القيمة هي الـ value فقط */}
+                          {c.name}
                         </option>
                       ))}
                     </select>
+                  </div>
+                  <div className="flex items-end">
                     <div
-                      className="w-8 h-8 border-2 border-black rounded shadow-sm flex-shrink-0"
-                      style={{ backgroundColor: v.color || "#eee" }}
-                    />
+                      className="w-full h-10 border-2 border-black shadow-inner"
+                      style={{ backgroundColor: group.colorHex }}
+                    ></div>
                   </div>
                 </div>
 
-                <div className="w-24">
-                  <label className="text-xs font-bold block mb-1">المقاس</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {group.previews.map((src, pIdx) => (
+                    <div
+                      key={pIdx}
+                      className="relative aspect-square border border-black bg-white"
+                    >
+                      <img
+                        src={src}
+                        className="w-full h-full object-cover"
+                        alt=""
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const n = [...colorGroups];
+                          n[gIdx].previews.splice(pIdx, 1);
+                          n[gIdx].files.splice(pIdx, 1);
+                          setColorGroups(n);
+                        }}
+                        className="absolute top-0 right-0 bg-black text-white p-0.5"
+                      >
+                        <FiX size={12} />
+                      </button>
+                    </div>
+                  ))}
+                  <label className="aspect-square border-2 border-dashed border-gray-400 flex flex-col items-center justify-center cursor-pointer hover:bg-white">
+                    <FiImage className="text-gray-400" />
+                    <span className="text-[10px] font-bold">رفع صور</span>
+                    <input
+                      type="file"
+                      multiple
+                      className="hidden"
+                      accept="image/*"
+                      onChange={(e) => handleImageUpload(gIdx, e.target.files)}
+                    />
+                  </label>
+                </div>
+              </div>
+            ))}
+          </section>
+
+          <section className="bg-black text-white p-6 border-4 border-black shadow-[8px_8px_0_0_rgba(253,224,71,1)]">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-black italic">المقاسات والمخزون</h3>
+              <button
+                type="button"
+                onClick={() =>
+                  setVariants([
+                    ...variants,
+                    { color: "", color_code: "", size: "M", stock: 1 },
+                  ])
+                }
+                className="bg-yellow-400 text-black p-1 border-2 border-white"
+              >
+                <FiPlus />
+              </button>
+            </div>
+            <div className="space-y-3">
+              {variants.map((v, idx) => (
+                <div
+                  key={idx}
+                  className="flex gap-2 items-center bg-gray-900 p-2 border border-gray-700"
+                >
+                  <select
+                    className="bg-white text-black p-2 font-bold text-xs w-1/3"
+                    value={v.color}
+                    onChange={(e) => {
+                      const selectedValue = e.target.value; // ستكون "Mint Green"
+                      const n = [...variants];
+                      n[idx].color = selectedValue;
+                      n[idx].color_code = TRENDING_COLORS.find(
+                        (c) => c.value === selectedValue,
+                      )?.hex;
+                      setVariants(n);
+                    }}
+                  >
+                    <option value="">اللون</option>
+                    {colorGroups
+                      .filter((g) => g.colorName)
+                      .map((g) => (
+                        <option key={g.colorName} value={g.colorName}>
+                          {/* ابحث عن الاسم العربي للعرض فقط */}
+                          {TRENDING_COLORS.find((c) => c.value === g.colorName)
+                            ?.name || g.colorName}
+                        </option>
+                      ))}
+                  </select>
                   <input
-                    className="w-full border-2 border-black p-2 rounded font-bold text-center uppercase"
+                    placeholder="المقاس"
+                    className="bg-white text-black p-2 font-bold text-xs w-1/4"
                     value={v.size}
                     onChange={(e) => {
                       const n = [...variants];
@@ -498,119 +502,245 @@ export default function AddProductPage() {
                       setVariants(n);
                     }}
                   />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const n = [...variants];
+                      n[idx].is_available = !n[idx].is_available;
+                      setVariants(n);
+                    }}
+                    className={`p-2 font-bold text-xs w-1/4 border-2 border-black transition-colors ${
+                      v.is_available
+                        ? "bg-green-400 text-black"
+                        : "bg-red-500 text-white"
+                    }`}
+                  >
+                    {v.is_available ? "متاح" : "غير متاح"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setVariants(variants.filter((_, i) => i !== idx))
+                    }
+                    className="text-red-500"
+                  >
+                    <FiTrash2 />
+                  </button>
                 </div>
-
-                <div className="w-28">
-                  <label className="text-xs font-bold block mb-1">
-                    الكمية (Stock)
-                  </label>
-                  <div className="flex items-center border-2 border-black rounded-md overflow-hidden bg-white">
-                    <input
-                      type="number"
-                      min="0"
-                      className="w-full p-2 font-black text-center outline-none"
-                      value={v.stock}
-                      onChange={(e) => {
-                        const n = [...variants];
-                        n[idx].stock = e.target.value;
-                        setVariants(n);
-                      }}
-                    />
-                    <span className="bg-black text-white text-[10px] px-2 py-3">
-                      ق
-                    </span>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setVariants(variants.filter((_, i) => i !== idx))
-                  }
-                  className="p-2 text-red-600 hover:bg-red-50 rounded-full transition-colors"
-                >
-                  <FiTrash2 size={22} />
-                </button>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </section>
         </div>
 
-        <button
-          disabled={loading}
-          className="w-full bg-yellow-400 py-6 rounded-2xl text-2xl font-black border-4 border-black shadow-[0_8px_0_0_rgba(0,0,0,1)] active:translate-y-1 active:shadow-none transition-all uppercase italic"
-        >
-          {loading
-            ? "جاري الحفظ..."
-            : editingId
-              ? "تحديث الموديل"
-              : "نشر الموديل الآن"}
-        </button>
-      </form>
-      {/* جدول عرض المنتجات */}
-      <div className="mt-20">
-        <h2 className="text-2xl font-black mb-6 bg-black text-white inline-block px-6 py-2 skew-x-[-10deg]">
-          الموديلات الحالية
-        </h2>
+        <div className="lg:col-span-6 space-y-8">
+          <section className="bg-yellow-50 p-6 border-4 border-black shadow-[8px_8px_0_0_rgba(0,0,0,1)]">
+            <h3 className="text-xl font-black mb-6 underline">
+              <FiTag /> معلومات الموديل
+            </h3>
+            <div className="grid grid-cols-1 gap-4">
+              <select
+                required
+                className="border-4 border-black p-3 font-bold bg-white"
+                value={formData.sub_category_id}
+                onChange={(e) =>
+                  setFormData({ ...formData, sub_category_id: e.target.value })
+                }
+              >
+                <option value="">-- اختر الفئة --</option>
+                {subCategories.map((sub) => (
+                  <option key={sub.id} value={sub.id}>
+                    {sub.name}
+                  </option>
+                ))}
+              </select>
+              <Input
+                label="اسم الموديل"
+                value={formData.name}
+                onChange={(v) => setFormData({ ...formData, name: v })}
+              />
+              <textarea
+                rows="3"
+                className="border-4 border-black p-3 font-bold bg-white"
+                value={formData.description}
+                onChange={(e) =>
+                  setFormData({ ...formData, description: e.target.value })
+                }
+                placeholder="الوصف..."
+              />
+              <div className="grid grid-cols-1 gap-4">
+                <Input
+                  label="الخامة"
+                  value={formData.material}
+                  onChange={(v) => setFormData({ ...formData, material: v })}
+                />
+                <Input
+                  label="تعليمات الغسيل"
+                  value={formData.care_instructions}
+                  onChange={(v) =>
+                    setFormData({ ...formData, care_instructions: v })
+                  }
+                />
+              </div>
+            </div>
+          </section>
 
-        {Object.keys(productsBySub).map((subId) => (
-          <div
-            key={subId}
-            className="mb-10 border-2 border-black rounded-2xl overflow-hidden shadow-[8px_8px_0_0_rgba(0,0,0,1)]"
-          >
-            {/* رأس الجدول: اسم الفئة */}
-            <div className="bg-gray-200 p-4 font-black border-b-2 border-black">
-              الفئة: {subCategories.find((s) => s.id == subId)?.name || "عام"}
+          <section className="bg-white p-6 border-4 border-black shadow-[8px_8px_0_0_rgba(59,130,246,1)]">
+            <div className="grid grid-cols-2 gap-4">
+              {/* السعر الأساسي */}
+              <Input
+                label="السعر الأساسي"
+                type="number"
+                value={formData.base_price}
+                onChange={(v) => setFormData({ ...formData, base_price: v })}
+              />
+
+              {/* اختيار نوع الخصم */}
+              <div className="flex flex-col gap-2">
+                <label className="font-black text-sm">خصم؟</label>
+                <div className="flex border-4 border-black">
+                  {["none", "percentage", "fixed"].map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() =>
+                        setFormData({ ...formData, discount_type: t })
+                      }
+                      className={`flex-1 p-2 font-black text-xs ${
+                        formData.discount_type === t
+                          ? "bg-black text-white"
+                          : "bg-white"
+                      }`}
+                    >
+                      {t === "none"
+                        ? "لا يوجد"
+                        : t === "percentage"
+                          ? "%"
+                          : "مبلغ"}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
-            <table className="w-full text-right bg-white">
-              <thead className="bg-gray-50 border-b-2 border-black">
-                <tr>
-                  <th className="p-4">الصورة</th>
-                  <th className="p-4">الاسم</th>
-                  <th className="p-4">السعر</th>
-                  <th className="p-4 text-center">إجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {productsBySub[subId].map((prod) => (
-                  <tr
-                    key={prod.id}
-                    className="border-b border-gray-100 hover:bg-yellow-50"
-                  >
-                    <td className="p-4">
+            {/* الحقل الذي كان ينقصك: يظهر فقط إذا تم اختيار نوع خصم */}
+            {formData.discount_type !== "none" && (
+              <div className="mt-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                <Input
+                  label={
+                    formData.discount_type === "percentage"
+                      ? "نسبة الخصم (%)"
+                      : "قيمة الخصم (ج.م)"
+                  }
+                  type="number"
+                  value={formData.discount_value}
+                  onChange={(v) =>
+                    setFormData({ ...formData, discount_value: v })
+                  }
+                />
+              </div>
+            )}
+
+            {/* عرض السعر النهائي */}
+            <div className="mt-6 p-4 border-4 border-dashed border-black bg-green-50 flex justify-between items-center">
+              <span className="font-black text-lg">السعر النهائي:</span>
+              <span className="text-3xl font-black text-green-600">
+                {(() => {
+                  const base = parseFloat(formData.base_price) || 0;
+                  const disc = parseFloat(formData.discount_value) || 0;
+                  let final = base;
+                  if (formData.discount_type === "percentage")
+                    final = base - (base * disc) / 100;
+                  else if (formData.discount_type === "fixed")
+                    final = base - disc;
+
+                  const result = final > 0 ? final : 0;
+                  return result.toLocaleString("en-US", {
+                    minimumFractionDigits: 2,
+                  });
+                })()}
+                <span className="text-sm mr-1 text-black font-bold">ج.م</span>
+              </span>
+            </div>
+          </section>
+
+          <button
+            disabled={loading}
+            className="w-full bg-green-500 py-6 text-3xl font-black border-4 border-black shadow-[8px_8px_0_0_rgba(0,0,0,1)] active:shadow-none transition-all italic"
+          >
+            {loading
+              ? "جاري المعالجة..."
+              : editingId
+                ? "تحديث الموديل"
+                : "نشر الموديل"}
+          </button>
+        </div>
+      </form>
+
+      <section className="mt-20">
+        <h2 className="text-3xl font-black mb-6 italic underline decoration-yellow-400">
+          المنتجات المرفوعة حالياً
+        </h2>
+        <table className="w-full border-4 border-black border-collapse bg-white">
+          <thead>
+            <tr className="bg-black text-white">
+              <th className="border-2 border-black p-3 text-right">الصورة</th>
+              <th className="border-2 border-black p-3 text-right">الاسم</th>
+              <th className="border-2 border-black p-3 text-right">الفئة</th>
+              <th className="border-2 border-black p-3 text-right">السعر</th>
+              <th className="border-2 border-black p-3 text-center">إجراءات</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Object.values(productsBySub)
+              .flat()
+              .map((product) => (
+                <tr key={product.id} className="hover:bg-gray-50">
+                  <td className="border-2 border-black p-2 w-20">
+                    {product.images?.[0] && (
                       <img
-                        src={prod.images?.[0]}
-                        className="w-12 h-16 object-cover rounded border border-black"
+                        src={
+                          typeof product.images[0] === "object"
+                            ? product.images[0].urls[0]
+                            : product.images[0]
+                        }
+                        className="w-16 h-16 object-cover border-2 border-black"
+                        alt=""
                       />
-                    </td>
-                    <td className="p-4 font-bold">{prod.name}</td>
-                    <td className="p-4 font-mono">{prod.base_price} EGP</td>
-                    <td className="p-4 text-center">
-                      <div className="flex justify-center gap-2">
-                        {/* زر التعديل */}
-                        <button
-                          onClick={() => startEdit(prod)}
-                          className="p-2 bg-blue-500 text-white rounded border border-black shadow-[2px_2px_0_0_rgba(0,0,0,1)] hover:translate-y-0.5 active:shadow-none transition-all"
-                        >
-                          <FiEdit3 />
-                        </button>
-                        {/* زر الحذف */}
-                        <button
-                          onClick={() => handleDelete(prod.id)}
-                          className="p-2 bg-red-500 text-white rounded border border-black shadow-[2px_2px_0_0_rgba(0,0,0,1)] hover:translate-y-0.5 active:shadow-none transition-all"
-                        >
-                          <FiTrash2 />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ))}
-      </div>
+                    )}
+                  </td>
+                  <td className="border-2 border-black p-3 font-bold">
+                    {product.name} <br />
+                    <span className="text-[10px] bg-yellow-300 px-1 border border-black">
+                      {product.code}
+                    </span>
+                  </td>
+                  <td className="border-2 border-black p-3 text-sm">
+                    {product.sub_categories?.name}
+                  </td>
+                  <td className="border-2 border-black p-3 font-black">
+                    {product.base_price} ج.م
+                  </td>
+                  <td className="border-2 border-black p-3 text-center">
+                    <div className="flex justify-center gap-2">
+                      <button
+                        onClick={() => handleEdit(product)}
+                        className="bg-blue-500 text-white p-2 border-2 border-black"
+                      >
+                        <FiEdit3 />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(product.id)}
+                        className="bg-red-500 text-white p-2 border-2 border-black"
+                      >
+                        <FiTrash2 />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      </section>
     </div>
   );
 }
@@ -618,13 +748,13 @@ export default function AddProductPage() {
 function Input({ label, type = "text", value, onChange }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="font-bold text-sm text-right">{label}</label>
+      <label className="font-black text-xs">{label}</label>
       <input
         required
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="border-2 border-black p-2 rounded-lg font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] focus:bg-yellow-50 outline-none transition-all"
+        className="border-4 border-black p-2 font-bold focus:bg-yellow-50 outline-none"
       />
     </div>
   );

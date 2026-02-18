@@ -17,35 +17,17 @@ export default function Footer() {
 
         <div>
           <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] mb-6 text-black">
-            Shop
+            Collections
           </h3>
           <ul className="space-y-4 text-xs text-gray-500 tracking-widest uppercase">
             <li>
-              <Link href="/shop" className="hover:text-black">
+              <Link href="/collections" className="hover:text-black">
                 All Collections
               </Link>
             </li>
             <li>
-              <Link href="/new-arrivals" className="hover:text-black">
-                New Arrivals
-              </Link>
-            </li>
-          </ul>
-        </div>
-
-        <div>
-          <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] mb-6 text-black">
-            Support
-          </h3>
-          <ul className="space-y-4 text-xs text-gray-500 tracking-widest uppercase">
-            <li>
-              <Link href="/shipping" className="hover:text-black">
-                Shipping Policy
-              </Link>
-            </li>
-            <li>
-              <Link href="/returns" className="hover:text-black">
-                Returns & Exchanges
+              <Link href="/offers" className="hover:text-black">
+                Special Offers
               </Link>
             </li>
           </ul>

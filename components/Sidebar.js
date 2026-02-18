@@ -43,13 +43,14 @@ const Sidebar = () => {
       path: "/admin/manage-orders-page",
       icon: <FiShoppingBag />,
     },
-    { name: "المنتجات", path: "/admin/products", icon: <FiPackage /> },
+
     {
       name: "الأقسام الرئيسية",
       path: "/admin/main-categories",
       icon: <FiLayers />,
     },
     { name: "الأقسام الفرعية", path: "/admin/sub-categories", icon: <FiTag /> },
+    { name: "المنتجات", path: "/admin/products", icon: <FiPackage /> },
     { name: "واجهة الموقع", path: "/admin/manage-header", icon: <FiLayout /> },
   ];
 

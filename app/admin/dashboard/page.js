@@ -93,55 +93,41 @@ export default function AdminDashboard() {
         .select("*", { count: "exact", head: true })
         .eq("is_available", false);
 
-      // 3. جلب آخر 5 طلبات
-      const { data: latestOrders } = await supabase
-        .from("orders")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(5);
+      // 3. جلب المساحة الحقيقية لقاعدة البيانات عبر الـ RPC
+      const { data: dbRealSize } = await supabase.rpc("get_real_db_size");
 
-      // 4. حساب حجم الـ Storage
-      const { data: pStorageFiles } = await supabase.storage
-        .from("product-images")
-        .list();
-      const { data: hStorageFiles } = await supabase.storage
-        .from("header-images")
-        .list();
+      // 4. الحساب الدقيق لحجم التخزين (Storage Buckets)
+      const calculateSize = async (bucket, path = "") => {
+        const { data } = await supabase.storage
+          .from(bucket)
+          .list(path, { limit: 10000 });
+        return data?.reduce((acc, f) => acc + (f.metadata?.size || 0), 0) || 0;
+      };
 
-      const pBytes =
-        pStorageFiles?.reduce((acc, f) => acc + (f.metadata?.size || 0), 0) ||
-        0;
-      const hBytes =
-        hStorageFiles?.reduce((acc, f) => acc + (f.metadata?.size || 0), 0) ||
-        0;
-      const totalMB = ((pBytes + hBytes) / (1024 * 1024)).toFixed(2);
+      const sizes = await Promise.all([
+        calculateSize("product-images"),
+        calculateSize("product-images", "products"),
+        calculateSize("header-images"),
+      ]);
 
-      // 5. تقدير حجم الداتابيز
-      const { count: pCount } = await supabase
-        .from("products")
-        .select("*", { count: "exact", head: true });
-      const { count: vCount } = await supabase
-        .from("product_variants")
-        .select("*", { count: "exact", head: true });
-      const { count: hCount } = await supabase
-        .from("headers")
-        .select("*", { count: "exact", head: true });
-
-      const totalRows =
-        (ordersData?.length || 0) +
-        (pCount || 0) +
-        (vCount || 0) +
-        (hCount || 0);
-      const estimatedDbMB = (totalRows * 0.1).toFixed(2);
+      const totalStorageBytes = sizes.reduce((a, b) => a + b, 0);
+      const totalStorageMB = (totalStorageBytes / (1024 * 1024)).toFixed(2);
 
       setStats({
         orders: ordersData?.length || 0,
         outOfStock: outOfStockCount || 0,
         totalRevenue: ordersStats.revenue,
         processingOrders: ordersStats.processing,
-        dbSize: estimatedDbMB,
-        storageSize: totalMB,
+        dbSize: (dbRealSize || 0.01).toFixed(2), // سيظهر لك المساحة الحقيقية (مثلاً 1.25 MB)
+        storageSize: totalStorageMB,
       });
+
+      // جلب آخر 5 طلبات للعرض في الجدول
+      const { data: latestOrders } = await supabase
+        .from("orders")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(5);
 
       setRecentOrders(latestOrders || []);
     } catch (error) {
@@ -151,69 +137,68 @@ export default function AdminDashboard() {
 
   async function cleanUnusedImages() {
     setIsCleaning(true);
-    let totalDeleted = 0;
     try {
-      const { data: productsData } = await supabase
-        .from("products")
-        .select("images");
-      const { data: headersData } = await supabase
-        .from("headers")
-        .select("image_url");
+      console.log("--- بدء التنظيف باستخدام SQL Function ---");
 
-      const extractFileName = (url) => url?.split("/").pop();
-      const usedProductImages = new Set();
-      productsData?.forEach((p) => {
-        p.images?.forEach((url) => usedProductImages.add(extractFileName(url)));
-      });
+      // 1. جلب الأسماء المستخدمة مباشرة من الداتا بيز (تتخطى مشاكل الـ Loop والـ RLS)
+      const { data: usedNames, error: sqlError } = await supabase.rpc(
+        "get_all_used_images",
+      );
 
-      const usedHeaderImages = new Set();
-      headersData?.forEach((h) => {
-        usedHeaderImages.add(extractFileName(h.image_url));
-      });
-
-      // تنظيف باكت المنتجات
-      const { data: pStorageFiles } = await supabase.storage
-        .from("product-images")
-        .list();
-      const pUnused = pStorageFiles
-        ?.filter(
-          (f) => !usedProductImages.has(f.name) && f.name !== ".emptyKeep",
-        )
-        .map((f) => f.name);
-
-      if (pUnused?.length > 0) {
-        await supabase.storage.from("product-images").remove(pUnused);
-        totalDeleted += pUnused.length;
-      }
-
-      // تنظيف باكت الهيدرز
-      const { data: hStorageFiles } = await supabase.storage
-        .from("header-images")
-        .list();
-      const hUnused = hStorageFiles
-        ?.filter(
-          (f) => !usedHeaderImages.has(f.name) && f.name !== ".emptyKeep",
-        )
-        .map((f) => f.name);
-
-      if (hUnused?.length > 0) {
-        await supabase.storage.from("header-images").remove(hUnused);
-        totalDeleted += hUnused.length;
-      }
-
-      if (totalDeleted > 0) {
-        alert(`تم بنجاح حذف ${totalDeleted} صورة غير مستخدمة.`);
-        fetchDashboardData();
+      if (sqlError) {
+        console.error("SQL Error:", sqlError);
+        // إذا فشلت الدالة، نستخدم الطريقة اليدوية كخطة بديلة (Fallback)
+        const { data: pData } = await supabase
+          .from("products")
+          .select("images");
+        var usedFiles = new Set();
+        pData?.forEach((p) => {
+          p.images?.forEach((item) => {
+            item.urls?.forEach((url) => {
+              const name = url.split("/").pop().split("?")[0];
+              if (name) usedFiles.add(name);
+            });
+          });
+        });
       } else {
-        alert("لا يوجد صور غير مستخدمة لحذفها.");
+        var usedFiles = new Set(
+          usedNames.map((item) => item.image_name.replace(/"/g, "")),
+        );
+      }
+
+      console.log("الملفات المحمية المكتشفة:", Array.from(usedFiles));
+
+      // 2. جلب الصور الموجودة فعلياً في المجلد
+      const { data: storageFiles } = await supabase.storage
+        .from("product-images")
+        .list("products", { limit: 1000 });
+
+      if (!storageFiles) throw new Error("لم نتمكن من الوصول للمخزن");
+
+      // 3. تحديد ما سيتم حذفه
+      const toDelete = storageFiles
+        .filter((f) => f.name !== ".emptyKeep" && !usedFiles.has(f.name))
+        .map((f) => `products/${f.name}`);
+
+      console.log("الملفات المرشحة للحذف:", toDelete);
+
+      if (toDelete.length > 0) {
+        const { error: delError } = await supabase.storage
+          .from("product-images")
+          .remove(toDelete);
+
+        if (delError) throw delError;
+        alert(`تم حذف ${toDelete.length} صورة غير مستخدمة بنجاح.`);
+      } else {
+        alert("المخزن نظيف تماماً، لا توجد صور زائدة.");
       }
     } catch (err) {
-      alert("حدث خطأ أثناء التنظيف: " + err.message);
+      console.error(err);
+      alert("فشل التنظيف: " + err.message);
     } finally {
       setIsCleaning(false);
     }
   }
-
   if (loading)
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">

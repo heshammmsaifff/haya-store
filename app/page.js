@@ -1,9 +1,10 @@
-import React from "react";
+import { Hero, FeaturedCategories } from "@/components/home";
 
-export default function page() {
+export default function HomePage() {
   return (
-    <div>
-      <h1 className="text-center mt-20">Hello haya</h1>
-    </div>
+    <main>
+      <Hero />
+      <FeaturedCategories />
+    </main>
   );
 }
