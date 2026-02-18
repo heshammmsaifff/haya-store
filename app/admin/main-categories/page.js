@@ -8,16 +8,18 @@ import {
   FiEdit3,
   FiX,
   FiCheck,
+  FiUploadCloud,
+  FiImage,
 } from "react-icons/fi";
 
 export default function AddCategoryPage() {
   const [name, setName] = useState("");
+  const [imageFile, setImageFile] = useState(null);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState("");
 
-  // جلب البيانات عند تحميل الصفحة
   useEffect(() => {
     fetchCategories();
   }, []);
@@ -32,20 +34,43 @@ export default function AddCategoryPage() {
     if (error) console.error("Error fetching:", error);
   }
 
+  // دالة الرفع الموحدة (تستخدم للإضافة وللتعديل)
+  const uploadImage = async (file) => {
+    const fileExt = file.name.split(".").pop();
+    const fileName = `${Math.random()}.${fileExt}`;
+    const filePath = `categories/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("product-images")
+      .upload(filePath, file);
+
+    if (uploadError) throw uploadError;
+
+    const { data } = supabase.storage
+      .from("product-images")
+      .getPublicUrl(filePath);
+
+    return data.publicUrl;
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
     setLoading(true);
-
     try {
+      let publicUrl = null;
+      if (imageFile) {
+        publicUrl = await uploadImage(imageFile);
+      }
       const { error } = await supabase
         .from("categories")
-        .insert([{ name: name }]);
+        .insert([{ name: name, image_url: publicUrl }]);
 
       if (error) throw error;
 
-      alert("تم إضافة الفئة الرئيسية بنجاح! 🏷️");
+      alert("تم إضافة الفئة بنجاح! 🏷️");
       setName("");
-      fetchCategories(); // تحديث القائمة
+      setImageFile(null);
+      fetchCategories();
     } catch (error) {
       alert("خطأ: " + error.message);
     } finally {
@@ -53,33 +78,59 @@ export default function AddCategoryPage() {
     }
   };
 
-  const deleteCategory = async (id) => {
-    if (
-      confirm(
-        "هل أنت متأكد من حذف هذه الفئة؟ قد يؤثر ذلك على الأقسام الفرعية المرتبطة بها.",
-      )
-    ) {
-      const { error } = await supabase.from("categories").delete().eq("id", id);
-      if (error) alert("خطأ في الحذف: " + error.message);
-      else fetchCategories();
-    }
-  };
-
   const startEdit = (cat) => {
     setEditingId(cat.id);
     setEditName(cat.name);
+    setImageFile(null); // تصفير أي ملف مختار سابقاً عند بدء تعديل جديد
   };
 
-  const saveEdit = async (id) => {
-    const { error } = await supabase
-      .from("categories")
-      .update({ name: editName })
-      .eq("id", id);
+  const saveEdit = async (id, oldImageUrl) => {
+    setLoading(true);
+    try {
+      let finalImageUrl = oldImageUrl;
 
-    if (error) alert("خطأ في التحديث");
-    else {
+      // إذا اختار المستخدم صورة جديدة أثناء التعديل
+      if (imageFile) {
+        finalImageUrl = await uploadImage(imageFile);
+
+        // حذف الصورة القديمة من السيرفر لتوفير المساحة
+        if (oldImageUrl) {
+          const path = oldImageUrl.split("product-images/")[1];
+          await supabase.storage.from("product-images").remove([path]);
+        }
+      }
+
+      const { error } = await supabase
+        .from("categories")
+        .update({
+          name: editName,
+          image_url: finalImageUrl,
+        })
+        .eq("id", id);
+
+      if (error) throw error;
+
       setEditingId(null);
+      setImageFile(null);
       fetchCategories();
+    } catch (error) {
+      alert("خطأ في التحديث: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteCategory = async (id, imageUrl) => {
+    if (confirm("هل أنت متأكد من حذف هذه الفئة؟")) {
+      const { error } = await supabase.from("categories").delete().eq("id", id);
+      if (error) alert("خطأ في الحذف: " + error.message);
+      else {
+        if (imageUrl) {
+          const path = imageUrl.split("product-images/")[1];
+          await supabase.storage.from("product-images").remove([path]);
+        }
+        fetchCategories();
+      }
     }
   };
 
@@ -100,22 +151,47 @@ export default function AddCategoryPage() {
             onSubmit={handleSave}
             className="bg-white p-6 border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]"
           >
-            <div className="space-y-4">
-              <label className="font-black block text-sm uppercase tracking-widest">
-                اسم الفئة
-              </label>
-              <input
-                required
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full border-4 border-black p-4 rounded-none font-bold outline-none focus:bg-yellow-50 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
-              />
+            <div className="space-y-6">
+              <div>
+                <label className="font-black block text-sm uppercase mb-2">
+                  اسم الفئة
+                </label>
+                <input
+                  required
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full border-4 border-black p-4 font-bold outline-none focus:bg-yellow-50 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+                />
+              </div>
+              <div>
+                <label className="font-black block text-sm uppercase mb-2">
+                  صورة الفئة
+                </label>
+                <div className="relative group border-4 border-dashed border-black p-4 text-center hover:bg-gray-50 transition-all cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setImageFile(e.target.files[0])}
+                    className="absolute inset-0 opacity-0 cursor-pointer"
+                  />
+                  {imageFile ? (
+                    <div className="flex items-center justify-center gap-2 text-green-600 font-bold">
+                      <FiCheck /> {imageFile.name}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 text-gray-500">
+                      <FiUploadCloud size={30} />
+                      <span className="text-xs font-bold">اضغط لرفع صورة</span>
+                    </div>
+                  )}
+                </div>
+              </div>
               <button
                 disabled={loading}
-                className="w-full bg-black text-white py-4 font-black hover:bg-yellow-400 hover:text-black transition-all border-2 border-black disabled:bg-gray-400 active:translate-y-1 active:shadow-none shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)]"
+                className="w-full bg-black text-white py-4 font-black hover:bg-yellow-400 hover:text-black transition-all border-2 border-black disabled:bg-gray-400 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)]"
               >
-                {loading ? "جاري الحفظ..." : "حفظ الفئة الآن"}
+                {loading ? "جاري المعالجة..." : "حفظ الفئة الآن"}
               </button>
             </div>
           </form>
@@ -127,55 +203,100 @@ export default function AddCategoryPage() {
             الفئات الحالية ({categories.length})
           </h2>
           <div className="space-y-4">
-            {categories.length === 0 && (
-              <p className="text-gray-500 italic">لا توجد فئات مضافة بعد...</p>
-            )}
             {categories.map((cat) => (
               <div
                 key={cat.id}
-                className="flex items-center justify-between p-4 border-4 border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:bg-gray-50 transition-colors"
+                className="flex items-center gap-4 p-3 border-4 border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
               >
-                {editingId === cat.id ? (
-                  <div className="flex items-center gap-2 flex-1">
-                    <input
-                      className="border-2 border-black p-1 flex-1 font-bold"
-                      value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
+                {/* معاينة الصورة */}
+                <div className="w-16 h-16 border-2 border-black overflow-hidden bg-gray-100 flex-shrink-0">
+                  {cat.image_url ? (
+                    <img
+                      src={cat.image_url}
+                      alt=""
+                      className="w-full h-full object-cover"
                     />
-                    <button
-                      onClick={() => saveEdit(cat.id)}
-                      className="text-green-600 p-2 border-2 border-black hover:bg-green-100"
-                    >
-                      <FiCheck />
-                    </button>
-                    <button
-                      onClick={() => setEditingId(null)}
-                      className="text-red-600 p-2 border-2 border-black hover:bg-red-100"
-                    >
-                      <FiX />
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <span className="text-xl font-black">{cat.name}</span>
-                    <div className="flex gap-2">
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-400">
+                      <FiImage />
+                    </div>
+                  )}
+                </div>
+
+                {/* الاسم أو حقل التعديل */}
+                <div className="flex-1">
+                  {editingId === cat.id ? (
+                    <div className="space-y-2">
+                      <input
+                        className="border-2 border-black p-1 w-full font-bold shadow-inner"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        autoFocus
+                      />
+                      {/* حقل تغيير الصورة أثناء التعديل */}
+                      <div className="relative border-2 border-dashed border-black p-1 text-center bg-gray-50 cursor-pointer">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => setImageFile(e.target.files[0])}
+                          className="absolute inset-0 opacity-0 cursor-pointer"
+                        />
+                        <span className="text-[10px] font-bold flex items-center justify-center gap-1">
+                          {imageFile ? (
+                            <>
+                              <FiCheck className="text-green-600" /> جاهز للرفع
+                            </>
+                          ) : (
+                            <>
+                              <FiUploadCloud /> تغيير الصورة؟
+                            </>
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="text-lg font-black">{cat.name}</span>
+                  )}
+                </div>
+
+                {/* أزرار التحكم */}
+                <div className="flex gap-2">
+                  {editingId === cat.id ? (
+                    <>
+                      <button
+                        onClick={() => saveEdit(cat.id, cat.image_url)}
+                        disabled={loading}
+                        className="p-2 border-2 border-black bg-green-400 hover:bg-green-500 disabled:bg-gray-300"
+                      >
+                        <FiCheck />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingId(null);
+                          setImageFile(null);
+                        }}
+                        className="p-2 border-2 border-black bg-gray-200"
+                      >
+                        <FiX />
+                      </button>
+                    </>
+                  ) : (
+                    <>
                       <button
                         onClick={() => startEdit(cat)}
-                        className="p-2 border-2 border-black bg-blue-400 hover:bg-blue-500 transition-colors"
-                        title="تعديل"
+                        className="p-2 border-2 border-black bg-blue-400 hover:bg-blue-500"
                       >
                         <FiEdit3 />
                       </button>
                       <button
-                        onClick={() => deleteCategory(cat.id)}
-                        className="p-2 border-2 border-black bg-red-400 hover:bg-red-500 transition-colors"
-                        title="حذف"
+                        onClick={() => deleteCategory(cat.id, cat.image_url)}
+                        className="p-2 border-2 border-black bg-red-400 hover:bg-red-500"
                       >
                         <FiTrash2 />
                       </button>
-                    </div>
-                  </>
-                )}
+                    </>
+                  )}
+                </div>
               </div>
             ))}
           </div>
