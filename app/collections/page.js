@@ -1,45 +1,32 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { supabase } from "@/lib/supabase";
 import ProductCard from "@/components/ProductCard";
-import { FiSliders, FiX, FiChevronDown, FiChevronRight } from "react-icons/fi";
+import { FiSliders, FiChevronDown, FiChevronRight } from "react-icons/fi";
 import { useSearchParams } from "next/navigation";
 
-export default function CollectionPage() {
+function CollectionContent() {
   const searchParams = useSearchParams();
   const categoryIdFromUrl = searchParams.get("category");
+  const searchQueryFromUrl = searchParams.get("search");
 
-  // الـ States الأساسية
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [sortBy, setSortBy] = useState("newest");
   const [categories, setCategories] = useState([]);
-  const searchQueryFromUrl = searchParams.get("search");
-
-  // التعديل هنا: امسح الـ State القديمة وسيب دي بس
   const [selectedCategory, setSelectedCategory] = useState(
     categoryIdFromUrl || "all",
   );
-
   const [selectedSubCategory, setSelectedSubCategory] = useState(null);
   const [inStockOnly, setInStockOnly] = useState(false);
 
-  // ضروري تضيف الـ useEffect ده عشان لو المستخدم داس على كاتيجوري تانية وهو جوه الصفحة
   useEffect(() => {
     if (categoryIdFromUrl) {
       setSelectedCategory(categoryIdFromUrl);
       setSelectedSubCategory(null);
     } else {
       setSelectedCategory("all");
-    }
-  }, [categoryIdFromUrl]);
-
-  // 3. أهم خطوة: مراقبة تغير اللينك وتحديث الاختيار
-  useEffect(() => {
-    if (categoryIdFromUrl) {
-      setSelectedCategory(categoryIdFromUrl);
-      setSelectedSubCategory(null); // نصفر القسم الفرعي لو اخترنا قسم رئيسي جديد
     }
   }, [categoryIdFromUrl]);
 
@@ -51,81 +38,58 @@ export default function CollectionPage() {
     sortBy,
     inStockOnly,
     searchQueryFromUrl,
-  ]); // أضفنا searchQueryFromUrl هنا
+  ]);
 
   async function fetchData() {
     setLoading(true);
     try {
-      // 1. جلب الأقسام الرئيسية والأقسام الفرعية المرتبطة بها
       const { data: catData } = await supabase.from("categories").select(`
-          id,
-          name,
-          sub_categories (
-            id,
-            name
-          )
+          id, name, sub_categories (id, name)
         `);
       setCategories(catData || []);
 
-      // 2. بناء استعلام المنتجات الأساسي
       let query = supabase.from("products").select(`
         *,
         sub_category:sub_categories!inner (
-          id,
-          name,
-          category_id,
-          category:categories (
-            id,
-            name
-          )
+          id, name, category_id,
+          category:categories (id, name)
         ),
-        product_variants (
-          is_available
-        )
+        product_variants (is_available)
       `);
 
-      // 3. تطبيق فلتر البحث (Search) إذا وجد في الرابط
       if (searchQueryFromUrl) {
         query = query.ilike("name", `%${searchQueryFromUrl}%`);
       }
-
-      // 4. تطبيق فلترة الأقسام (فقط إذا لم يكن هناك بحث أو إذا أردت دمج البحث مع القسم)
       if (selectedSubCategory) {
         query = query.eq("sub_category_id", selectedSubCategory);
       } else if (selectedCategory !== "all") {
         query = query.eq("sub_category.category_id", selectedCategory);
       }
 
-      // 5. الترتيب
-      if (sortBy === "price-low") {
+      if (sortBy === "price-low")
         query = query.order("base_price", { ascending: true });
-      } else if (sortBy === "price-high") {
+      else if (sortBy === "price-high")
         query = query.order("base_price", { ascending: false });
-      } else {
-        query = query.order("created_at", { ascending: false });
-      }
+      else query = query.order("created_at", { ascending: false });
 
       const { data, error } = await query;
       if (error) throw error;
 
-      // 6. معالجة البيانات النهائية (Formatting)
-      let formattedData = data.map((product) => ({
-        ...product,
-        category_name: product.sub_category?.category?.name || "HAYA",
-        sub_category_name: product.sub_category?.name || "",
+      let formattedData = data.map((p) => ({
+        ...p,
+        category_name: p.sub_category?.category?.name || "HAYA",
+        sub_category_name: p.sub_category?.name || "",
       }));
 
-      // 7. فلترة المخزون يدوياً لضمان الدقة
       if (inStockOnly) {
-        formattedData = formattedData.filter((product) =>
-          product.product_variants?.some((v) => v.is_available === true),
+        formattedData = formattedData.filter((p) =>
+          p.product_variants?.some((v) => v.is_available === true),
         );
       }
-
       setProducts(formattedData);
     } catch (error) {
       console.error("Fetch Error:", error.message);
-      setProducts([]); // تأمين الحماية في حال حدوث خطأ
+      setProducts([]);
     } finally {
       setLoading(false);
     }
@@ -149,7 +113,6 @@ export default function CollectionPage() {
               Showing {products.length} Products
             </p>
           </div>
-
           <div className="flex items-center gap-4">
             <button
               onClick={() => setShowFilters(!showFilters)}
@@ -158,7 +121,6 @@ export default function CollectionPage() {
               <FiSliders size={14} />{" "}
               {showFilters ? "Close Filters" : "Filters"}
             </button>
-
             <div className="relative">
               <select
                 value={sortBy}
@@ -186,7 +148,6 @@ export default function CollectionPage() {
                 Categories
               </h3>
               <div className="flex flex-col gap-4">
-                {/* خيار الكل */}
                 <button
                   onClick={() => {
                     setSelectedCategory("all");
@@ -196,26 +157,17 @@ export default function CollectionPage() {
                 >
                   Shop All
                 </button>
-
-                {/* قائمة الأقسام الهرمية */}
                 {categories.map((cat) => (
                   <div key={cat.id} className="space-y-3">
-                    {/* القسم الرئيسي */}
                     <button
                       onClick={() => {
                         setSelectedCategory(cat.id);
                         setSelectedSubCategory(null);
                       }}
-                      className={`text-left text-[10px] uppercase tracking-widest block w-full transition-all ${
-                        selectedCategory === cat.id && !selectedSubCategory
-                          ? " font-bold text-[14px] text-black"
-                          : "text-gray-500 text-[12px] hover:text-black"
-                      }`}
+                      className={`text-left text-[10px] uppercase tracking-widest block w-full transition-all ${selectedCategory === cat.id && !selectedSubCategory ? " font-bold text-[14px] text-black" : "text-gray-500 text-[12px] hover:text-black"}`}
                     >
                       {cat.name}
                     </button>
-
-                    {/* الأقسام الفرعية - تظهر فقط إذا كان هذا القسم هو المختار حالياً */}
                     {selectedCategory === cat.id && (
                       <div className="flex flex-col gap-2 pr-4 border-r border-black/10 animate-in fade-in slide-in-from-top-1 duration-300">
                         {cat.sub_categories?.map((sub) => (
@@ -225,11 +177,7 @@ export default function CollectionPage() {
                               setSelectedSubCategory(sub.id);
                               setSelectedCategory(cat.id);
                             }}
-                            className={`text-left text-[9px] uppercase tracking-[0.2em] transition-all flex items-center gap-2 ${
-                              selectedSubCategory === sub.id
-                                ? "font-black text-black"
-                                : "text-gray-400 hover:text-black"
-                            }`}
+                            className={`text-left text-[9px] uppercase tracking-[0.2em] transition-all flex items-center gap-2 ${selectedSubCategory === sub.id ? "font-black text-black" : "text-gray-400 hover:text-black"}`}
                           >
                             {selectedSubCategory === sub.id && (
                               <FiChevronRight size={10} />
@@ -242,23 +190,6 @@ export default function CollectionPage() {
                   </div>
                 ))}
               </div>
-            </div>
-
-            <div className="pt-8 border-t border-gray-100">
-              <h3 className="text-[11px] font-black uppercase tracking-[0.3em] mb-6">
-                Availability
-              </h3>
-              <label className="flex items-center gap-3 cursor-pointer group">
-                <input
-                  type="checkbox"
-                  checked={inStockOnly}
-                  onChange={(e) => setInStockOnly(e.target.checked)}
-                  className="w-4 h-4 accent-black cursor-pointer"
-                />
-                <span className="text-[10px] uppercase tracking-widest text-gray-500 group-hover:text-black">
-                  In Stock Only
-                </span>
-              </label>
             </div>
           </aside>
         )}
@@ -289,5 +220,20 @@ export default function CollectionPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+// المكون الأساسي الذي يحل مشكلة الـ Build
+export default function CollectionPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="h-screen flex items-center justify-center uppercase tracking-widest text-[10px]">
+          Loading...
+        </div>
+      }
+    >
+      <CollectionContent />
+    </Suspense>
   );
 }
