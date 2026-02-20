@@ -219,9 +219,9 @@ export default function AdminDashboard() {
           <h1 className="text-4xl font-black uppercase tracking-tighter italic">
             لوحة التحكم
           </h1>
-          <p className="font-bold text-gray-400 text-sm uppercase">
+          {/* <p className="font-bold text-gray-400 text-sm uppercase">
             Supabase Database Infrastructure Monitoring
-          </p>
+          </p> */}
         </div>
         <button
           onClick={cleanUnusedImages}

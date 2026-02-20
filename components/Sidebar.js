@@ -43,6 +43,11 @@ const Sidebar = () => {
       path: "/admin/manage-orders-page",
       icon: <FiShoppingBag />,
     },
+    {
+      name: "رسائل التواصل",
+      path: "/admin/contact-messages",
+      icon: <FiShoppingBag />,
+    },
 
     {
       name: "الأقسام الرئيسية",

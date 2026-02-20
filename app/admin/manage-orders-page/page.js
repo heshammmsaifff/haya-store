@@ -12,8 +12,6 @@ import {
   FiUser,
   FiHash,
   FiShoppingCart,
-  // FiCalendar,
-  // FiRefreshCcw,
 } from "react-icons/fi";
 
 export default function ManageOrdersPage() {
@@ -159,12 +157,35 @@ export default function ManageOrdersPage() {
             active={filter === "pending"}
             onClick={() => setFilter("pending")}
             color="bg-yellow-400"
+            count={orders.filter((o) => o.status === "pending").length}
           />
           <FilterBtn
             label="تجهيز"
             active={filter === "processing"}
             onClick={() => setFilter("processing")}
             color="bg-blue-400"
+            count={orders.filter((o) => o.status === "processing").length}
+          />
+          <FilterBtn
+            label="تم الشحن"
+            active={filter === "shipped"}
+            onClick={() => setFilter("shipped")}
+            color="bg-purple-400"
+            count={orders.filter((o) => o.status === "shipped").length}
+          />
+          <FilterBtn
+            label="تم التوصيل"
+            active={filter === "delivered"}
+            onClick={() => setFilter("delivered")}
+            color="bg-green-400"
+            count={orders.filter((o) => o.status === "delivered").length}
+          />
+          <FilterBtn
+            label="ملغي"
+            active={filter === "cancelled"}
+            onClick={() => setFilter("cancelled")}
+            color="bg-red-500 text-white"
+            count={orders.filter((o) => o.status === "cancelled").length}
           />
         </div>
       </header>

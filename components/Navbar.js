@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useCart } from "@/context/CartContext";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import {
   FiSearch,
   FiUser,
@@ -12,10 +12,12 @@ import {
   FiX,
   FiChevronRight,
   FiTrash2,
+  FiMail,
 } from "react-icons/fi";
 
 export default function Navbar() {
   const router = useRouter();
+  const pathname = usePathname();
   const {
     cartItems,
     removeFromCart,
@@ -32,30 +34,25 @@ export default function Navbar() {
   const [user, setUser] = useState(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // --- دالة المزامنة المحدثة بناءً على الـ Schema الخاصة بك ---
+  // --- مصفوفة الروابط الرئيسية لسهولة التحكم ---
+  const mainLinks = [
+    { name: "Home", href: "/" },
+    { name: "Categories", href: "/categories" },
+    { name: "Collections", href: "/collections" },
+    { name: "Contact", href: "/contact" },
+  ];
+
   const syncCartWithDB = useCallback(async () => {
     if (cartItems.length === 0) return;
-
     setIsSyncing(true);
     try {
       const productIds = cartItems.map((item) => item.id);
-
-      // جلب البيانات مع الربط بين جدول المنتجات وجدول المتغيرات (Variants)
       const { data: dbData, error: pError } = await supabase
         .from("products")
         .select(
           `
-          id, 
-          name, 
-          base_price, 
-          discount_type, 
-          discount_value,
-          product_variants (
-            color,
-            size,
-            is_available,
-            stock
-          )
+          id, name, base_price, discount_type, discount_value,
+          product_variants (color, size, is_available, stock)
         `,
         )
         .in("id", productIds);
@@ -65,14 +62,11 @@ export default function Navbar() {
       for (const item of cartItems) {
         const dbProduct = dbData?.find((p) => p.id === item.id);
         const uniqueKey = `${item.id}-${item.size}-${item.color}`;
-
-        // 1. التحقق من وجود المنتج
         if (!dbProduct) {
           removeFromCart(uniqueKey);
           continue;
         }
 
-        // 2. التحقق من توفر المتغير المحدد (اللون والمقاس)
         const variant = dbProduct.product_variants?.find(
           (v) => v.color === item.color && v.size === item.size,
         );
@@ -82,18 +76,14 @@ export default function Navbar() {
           continue;
         }
 
-        // 3. حساب السعر الحالي بناءً على القواعد الخاصة بك
         let currentActualPrice = parseFloat(dbProduct.base_price);
-        const dType = dbProduct.discount_type;
-        const dValue = parseFloat(dbProduct.discount_value || 0);
-
-        if (dType === "percentage") {
-          currentActualPrice -= (currentActualPrice * dValue) / 100;
-        } else if (dType === "fixed") {
-          currentActualPrice -= dValue;
+        if (dbProduct.discount_type === "percentage") {
+          currentActualPrice -=
+            (currentActualPrice * dbProduct.discount_value) / 100;
+        } else if (dbProduct.discount_type === "fixed") {
+          currentActualPrice -= dbProduct.discount_value;
         }
 
-        // 4. تحديث البيانات في السلة إذا تغير السعر أو الاسم
         if (
           Math.round(item.price) !== Math.round(currentActualPrice) ||
           item.name !== dbProduct.name
@@ -112,13 +102,15 @@ export default function Navbar() {
   }, [cartItems, removeFromCart, updateCartItemData]);
 
   useEffect(() => {
-    if (isCartOpen) {
-      syncCartWithDB();
-    }
+    if (isCartOpen) syncCartWithDB();
   }, [isCartOpen, syncCartWithDB]);
 
   useEffect(() => {
     fetchInitialData();
+    const handleResize = () => {
+      if (window.innerWidth > 768) setIsMenuOpen(false);
+    };
+    window.addEventListener("resize", handleResize);
 
     if (isMenuOpen || isCartOpen || isSearchOpen) {
       document.body.style.overflow = "hidden";
@@ -134,6 +126,7 @@ export default function Navbar() {
 
     return () => {
       subscription.unsubscribe();
+      window.removeEventListener("resize", handleResize);
       document.body.style.overflow = "unset";
     };
   }, [isMenuOpen, isCartOpen, isSearchOpen]);
@@ -160,145 +153,170 @@ export default function Navbar() {
 
   return (
     <>
-      {/* 1. Mobile Menu */}
+      {/* 1. Mobile Side Menu (Navigation + Categories) */}
       <div
-        className={`fixed inset-0 z-[130] transition-all duration-500 ${isMenuOpen ? "visible" : "invisible"}`}
+        className={`fixed inset-0 z-[150] transition-all duration-500 ${isMenuOpen ? "visible" : "invisible"}`}
       >
         <div
-          className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-500 ${isMenuOpen ? "opacity-100" : "opacity-0"}`}
+          className={`absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-500 ${isMenuOpen ? "opacity-100" : "opacity-0"}`}
           onClick={() => setIsMenuOpen(false)}
         />
         <div
-          className={`absolute top-0 left-0 h-full w-[85%] max-w-[320px] bg-white transition-transform duration-500 ease-in-out flex flex-col ${isMenuOpen ? "translate-x-0" : "-translate-x-full"}`}
+          className={`absolute top-0 left-0 h-full w-[85%] max-w-[350px] bg-white transition-transform duration-500 ease-out flex flex-col ${isMenuOpen ? "translate-x-0" : "-translate-x-full"}`}
         >
           <div className="p-6 flex justify-between items-center border-b">
-            <span className="text-[10px] font-black uppercase tracking-[0.2em]">
-              Menu
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">
+              Navigation
             </span>
-            <button onClick={() => setIsMenuOpen(false)}>
-              <FiX size={20} />
+            <button onClick={() => setIsMenuOpen(false)} className="p-2 -mr-2">
+              <FiX size={22} />
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto py-6">
-            <div className="flex flex-col">
-              {categories.map((cat) => (
+
+          <div className="flex-1 overflow-y-auto">
+            {/* Main Links */}
+            <div className="py-4 border-b">
+              {mainLinks.map((link) => (
                 <Link
-                  key={cat.id}
-                  href={`/collections?category=${cat.id}`}
+                  key={link.href}
+                  href={link.href}
                   onClick={() => setIsMenuOpen(false)}
-                  className="px-8 py-4 text-xs font-medium uppercase tracking-widest text-gray-600 border-b border-gray-50 flex justify-between items-center"
+                  className={`px-8 py-4 text-xs font-black uppercase tracking-widest flex justify-between items-center ${pathname === link.href ? "text-black" : "text-gray-500"}`}
                 >
-                  {cat.name} <FiChevronRight size={12} className="opacity-30" />
+                  {link.name}
                 </Link>
               ))}
             </div>
+
+            {/* Categories */}
+            <div className="py-4">
+              <span className="px-8 text-[9px] font-black uppercase tracking-widest text-gray-300">
+                Shop by Category
+              </span>
+              <div className="mt-2">
+                {categories.map((cat) => (
+                  <Link
+                    key={cat.id}
+                    href={`/collections?category=${cat.id}`}
+                    onClick={() => setIsMenuOpen(false)}
+                    className="px-8 py-3 text-[11px] font-medium uppercase tracking-widest text-gray-600 flex justify-between items-center hover:bg-gray-50"
+                  >
+                    {cat.name}{" "}
+                    <FiChevronRight size={14} className="opacity-20" />
+                  </Link>
+                ))}
+              </div>
+            </div>
           </div>
-          <div className="p-8 border-t bg-gray-50">
+
+          <div className="p-8 border-t bg-gray-50 space-y-4">
             <Link
               href={user ? "/profile" : "/login"}
               onClick={() => setIsMenuOpen(false)}
               className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest"
             >
-              <FiUser size={18} /> {user ? "My Account" : "Login / Register"}
+              <FiUser size={18} /> {user ? "My Profile" : "Account Login"}
+            </Link>
+            <Link
+              href="/contact"
+              onClick={() => setIsMenuOpen(false)}
+              className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest"
+            >
+              <FiMail size={18} /> Get in touch
             </Link>
           </div>
         </div>
       </div>
 
-      {/* 2. Side Cart */}
+      {/* 2. Side Cart (كما هي مع تحسينات بسيطة) */}
       <div
-        className={`fixed inset-0 z-[130] transition-all duration-500 ${isCartOpen ? "visible" : "invisible"}`}
+        className={`fixed inset-0 z-[150] transition-all duration-500 ${isCartOpen ? "visible" : "invisible"}`}
       >
         <div
-          className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-500 ${isCartOpen ? "opacity-100" : "opacity-0"}`}
+          className={`absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-500 ${isCartOpen ? "opacity-100" : "opacity-0"}`}
           onClick={() => setIsCartOpen(false)}
         />
         <div
-          className={`absolute top-0 right-0 h-full w-full max-w-[400px] bg-white shadow-2xl transition-transform duration-500 ease-in-out flex flex-col ${isCartOpen ? "translate-x-0" : "translate-x-full"}`}
+          className={`absolute top-0 right-0 h-full w-full max-w-[420px] bg-white shadow-2xl transition-transform duration-500 ease-out flex flex-col ${isCartOpen ? "translate-x-0" : "translate-x-full"}`}
         >
-          <div className="p-6 border-b flex justify-between items-center bg-white">
+          <div className="p-6 border-b flex justify-between items-center">
             <h2 className="text-[11px] font-black uppercase tracking-[0.3em]">
-              Your Bag ({cartCount}){" "}
-              {isSyncing && (
-                <span className="ml-2 animate-pulse text-gray-400 italic font-normal">
-                  Syncing...
-                </span>
-              )}
+              Shopping Bag ({cartCount})
             </h2>
             <button
               onClick={() => setIsCartOpen(false)}
               className="p-2 hover:rotate-90 transition-transform"
             >
-              <FiX size={20} />
+              <FiX size={22} />
             </button>
           </div>
-
-          <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+          {/* محتوى السلة ... */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
             {cartItems.length > 0 ? (
-              cartItems.map((item) => {
-                const uniqueKey = `${item.id}-${item.size}-${item.color}`;
-                return (
-                  <div
-                    key={uniqueKey}
-                    className="flex gap-4 group animate-in fade-in slide-in-from-right-4"
-                  >
-                    <div className="w-24 h-32 bg-gray-50 overflow-hidden flex-shrink-0 relative">
-                      <img
-                        src={
-                          typeof item.image === "string"
-                            ? item.image
-                            : item.image?.[0] ||
-                              "https://placehold.co/400x600?text=No+Image"
+              cartItems.map((item) => (
+                <div
+                  key={`${item.id}-${item.size}-${item.color}`}
+                  className="flex gap-4 group"
+                >
+                  <div className="w-20 h-28 bg-gray-50 flex-shrink-0 overflow-hidden">
+                    <img
+                      src={
+                        typeof item.image === "string"
+                          ? item.image
+                          : item.image?.[0]
+                      }
+                      className="w-full h-full object-cover"
+                      alt={item.name}
+                    />
+                  </div>
+                  <div className="flex-1 flex flex-col justify-between py-1">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h3 className="text-[10px] font-black uppercase tracking-widest">
+                          {item.name}
+                        </h3>
+                        <p className="text-[9px] text-gray-400 mt-1 uppercase">
+                          {item.color} / {item.size}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() =>
+                          removeFromCart(
+                            `${item.id}-${item.size}-${item.color}`,
+                          )
                         }
-                        alt={item.name}
-                        className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                      />
+                        className="text-gray-300 hover:text-black transition-colors"
+                      >
+                        <FiTrash2 size={14} />
+                      </button>
                     </div>
-                    <div className="flex-1 flex flex-col py-1">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="text-[10px] font-black uppercase tracking-widest leading-tight">
-                            {item.name}
-                          </h3>
-                          <p className="text-[9px] text-gray-400 uppercase mt-1">
-                            {item.color} / {item.size}
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => removeFromCart(uniqueKey)}
-                          className="text-gray-300 hover:text-black transition-colors"
-                        >
-                          <FiTrash2 size={14} />
-                        </button>
-                      </div>
-                      <div className="mt-auto flex justify-between items-center">
-                        <span className="text-[10px] text-gray-400">
-                          QTY: {item.quantity}
-                        </span>
-                        <span className="text-xs font-black tracking-tighter">
-                          {(item.price * item.quantity).toLocaleString()} EGP
-                        </span>
-                      </div>
+                    <div className="flex justify-between items-end">
+                      <span className="text-[10px] text-gray-400 font-bold">
+                        QTY: {item.quantity}
+                      </span>
+                      <span className="text-xs font-black tracking-tighter">
+                        {item.price.toLocaleString()} EGP
+                      </span>
                     </div>
                   </div>
-                );
-              })
+                </div>
+              ))
             ) : (
-              <div className="h-full flex flex-col items-center justify-center text-center py-20">
-                <p className="text-[10px] tracking-[0.2em] uppercase font-black text-gray-400">
-                  Your bag is currently empty
+              <div className="h-full flex flex-col items-center justify-center text-center opacity-30">
+                <FiShoppingBag size={40} className="mb-4" />
+                <p className="text-[10px] tracking-widest uppercase font-black">
+                  Bag is empty
                 </p>
               </div>
             )}
           </div>
-
           {cartItems.length > 0 && (
-            <div className="p-8 border-t bg-white">
-              <div className="flex justify-between items-center mb-8">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">
-                  Total
+            <div className="p-8 border-t">
+              <div className="flex justify-between items-center mb-6">
+                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                  Subtotal
                 </span>
-                <span className="text-xl font-black italic">
+                <span className="text-lg font-black italic">
                   {cartTotal.toLocaleString()} EGP
                 </span>
               </div>
@@ -307,113 +325,122 @@ export default function Navbar() {
                   setIsCartOpen(false);
                   router.push("/checkout");
                 }}
-                className="w-full bg-black text-white py-6 text-[10px] font-black uppercase tracking-[0.4em]"
+                className="w-full bg-black text-white py-5 text-[10px] font-black uppercase tracking-[0.3em] hover:bg-gray-900 transition-colors"
               >
-                Go to Checkout
+                Checkout
               </button>
             </div>
           )}
         </div>
       </div>
 
-      {/* 3. Search Overlay */}
+      {/* 3. Search Overlay (PC & Mobile) */}
       <div
-        className={`fixed inset-0 z-[150] bg-white transition-all duration-700 ease-in-out ${isSearchOpen ? "opacity-100 visible" : "opacity-0 invisible"}`}
+        className={`fixed inset-0 z-[200] bg-white transition-all duration-700 ease-in-out ${isSearchOpen ? "opacity-100 visible" : "opacity-0 invisible"}`}
       >
         <button
           onClick={() => setIsSearchOpen(false)}
-          className="absolute top-8 right-8 p-4 hover:rotate-90 transition-transform"
+          className="absolute top-6 right-6 md:top-10 md:right-10 p-4 hover:rotate-90 transition-transform"
         >
           <FiX size={30} />
         </button>
         <div className="h-full flex flex-col items-center justify-center max-w-5xl mx-auto px-6">
-          <form onSubmit={handleSearch} className="w-full relative">
+          <form onSubmit={handleSearch} className="w-full">
             <input
               autoFocus={isSearchOpen}
               type="text"
-              placeholder="SEARCH..."
-              className="w-full bg-transparent border-b border-black/10 py-8 text-2xl md:text-6xl font-light uppercase outline-none focus:border-black transition-colors"
+              placeholder="START TYPING..."
+              className="w-full bg-transparent border-b-2 border-black/10 py-6 md:py-10 text-xl md:text-6xl font-light uppercase outline-none focus:border-black transition-colors"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
-            <button
-              type="submit"
-              className="absolute right-0 top-1/2 -translate-y-1/2 p-4"
-            >
-              <FiSearch size={32} />
-            </button>
+            <p className="mt-6 text-[10px] tracking-[0.3em] text-gray-400 uppercase font-black">
+              Press enter to search or escape to close
+            </p>
           </form>
         </div>
       </div>
 
-      {/* 4. Navbar Main */}
-      <nav className="fixed top-0 w-full z-[100] bg-white/80 backdrop-blur-xl border-b border-gray-100 h-16 md:h-24 flex items-center transition-all duration-300">
+      {/* 4. Navbar Main Design */}
+      <nav className="fixed top-0 w-full z-[100] bg-white/90 backdrop-blur-md border-b border-gray-100 h-16 md:h-24 flex items-center transition-all duration-300">
         <div className="max-w-[1800px] mx-auto px-6 md:px-12 w-full flex justify-between items-center">
-          <div className="flex items-center gap-8 flex-1">
+          {/* Left: Mobile Menu Trigger / Desktop Links */}
+          {/* Left: Mobile Menu Trigger / Desktop Links */}
+          <div className="flex items-center gap-6 flex-1">
             <button
               className="md:hidden p-2 -ml-2"
               onClick={() => setIsMenuOpen(true)}
             >
               <FiMenu size={24} />
             </button>
-            <div className="hidden md:flex items-center gap-10">
-              <button
-                onClick={() => setIsSearchOpen(true)}
-                className="group flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] hover:text-gray-400 transition-all"
-              >
-                <FiSearch
-                  size={18}
-                  className="transition-transform group-hover:scale-110"
-                />
-                <span className="hidden lg:block">Search</span>
-              </button>
-              <Link
-                href="/collections"
-                className="text-[10px] font-black uppercase tracking-[0.2em] hover:text-gray-400 transition-all"
-              >
-                Collections
-              </Link>
+
+            <div className="hidden md:flex items-center gap-8">
+              {mainLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`text-[10px] font-black uppercase tracking-[0.2em] transition-all hover:opacity-50 ${
+                    pathname === link.href ? "border-b-2 border-black pb-1" : ""
+                  }`}
+                >
+                  {link.name}
+                </Link>
+              ))}
             </div>
           </div>
+
+          {/* Center: Logo */}
           <div className="flex-shrink-0">
             <Link href="/">
-              <h1 className="text-2xl md:text-4xl font-light tracking-[0.6em] uppercase text-black hover:opacity-70 transition-opacity">
+              <h1 className="text-xl md:text-3xl font-light tracking-[0.5em] uppercase text-black hover:opacity-60 transition-opacity">
                 HAYA
               </h1>
             </Link>
           </div>
-          <div className="flex items-center justify-end gap-2 md:gap-10 flex-1">
+
+          {/* Right: Actions (Search, Profile, Cart) */}
+          <div className="flex items-center justify-end gap-1 md:gap-6 flex-1">
+            {/* Search Icon (Always visible) */}
+            <button
+              onClick={() => setIsSearchOpen(true)}
+              className="p-3 hover:scale-110 transition-transform"
+            >
+              <FiSearch size={20} />
+            </button>
+
+            {/* Profile Icon (Desktop Only) */}
             <Link
               href={user ? "/profile" : "/login"}
-              className="hidden md:flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] hover:text-gray-400 transition-all"
+              className="hidden md:flex p-3 hover:scale-110 transition-transform"
             >
               <FiUser size={20} />
-              <span className="hidden lg:block">
-                {user ? "Account" : "Login"}
-              </span>
             </Link>
+
+            {/* Bag Icon (Always visible) */}
             <button
               onClick={() => setIsCartOpen(true)}
               className="group relative p-3 flex items-center gap-2"
             >
               <div className="relative">
                 <FiShoppingBag
-                  size={22}
+                  size={20}
                   className="group-hover:scale-110 transition-transform"
                 />
                 {cartCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-black text-white text-[7px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
+                  <span className="absolute -top-1 -right-1 bg-black text-white text-[7px] w-3.5 h-3.5 rounded-full flex items-center justify-center font-bold">
                     {cartCount}
                   </span>
                 )}
               </div>
-              <span className="hidden md:block text-[10px] font-black uppercase tracking-[0.2em] group-hover:text-gray-400 transition-all">
+              <span className="hidden lg:block text-[10px] font-black uppercase tracking-[0.2em]">
                 Bag
               </span>
             </button>
           </div>
         </div>
       </nav>
+
+      {/* Spacer to prevent content from going under fixed navbar */}
       <div className="h-16 md:h-24" />
     </>
   );

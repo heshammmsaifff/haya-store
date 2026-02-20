@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { FiArrowRight } from "react-icons/fi";
+import ProductCard from "@/components/ProductCard"; // تأكد من مسار الاستيراد الصحيح
 
 export default function NewArrivals() {
   const [products, setProducts] = useState([]);
@@ -11,11 +12,20 @@ export default function NewArrivals() {
   useEffect(() => {
     async function fetchNewArrivals() {
       try {
+        // جلب المنتجات مع الـ variants والـ sub_category لضمان عمل الـ Card بشكل كامل
         const { data, error } = await supabase
           .from("products")
-          .select("*")
+          .select(
+            `
+            *,
+            sub_categories (name),
+            product_variants (
+              is_available
+            )
+          `,
+          )
           .order("created_at", { ascending: false })
-          .limit(3);
+          .limit(4);
 
         if (error) throw error;
         setProducts(data || []);
@@ -28,21 +38,11 @@ export default function NewArrivals() {
     fetchNewArrivals();
   }, []);
 
-  const calculateFinalPrice = (basePrice, discountType, discountValue) => {
-    const price = parseFloat(basePrice);
-    const discount = parseFloat(discountValue || 0);
-    if (!discount || discount <= 0) return price;
-    if (discountType === "percentage") {
-      return price - price * (discount / 100);
-    } else {
-      return price - discount;
-    }
-  };
-
   if (loading) return <ArrivalsSkeleton />;
 
   return (
     <section className="py-20 px-6 md:px-12 bg-white text-left" dir="ltr">
+      {/* Header Section */}
       <div className="flex flex-col mb-12">
         <span className="text-[10px] uppercase tracking-[0.4em] text-gray-400 block mb-2">
           The Latest Pieces
@@ -52,88 +52,14 @@ export default function NewArrivals() {
         </h2>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8 mb-16">
-        {products.map((product) => {
-          // استخراج الصور من مصفوفة الـ JSON
-          // الصورة الأولى:
-          const mainImage = product.images?.[0]?.urls?.[0] || product.image_url;
-
-          // الصورة الثانية: (نبحث عنها في مصفوفة الـ urls لنفس اللون أو اللون اللي بعده)
-          const hoverImage =
-            product.images?.[0]?.urls?.[1] || // الصورة التانية لنفس اللون الأول
-            product.images?.[1]?.urls?.[0] || // لو مفيش، ناخد أول صورة للون التاني
-            null; // لو مفيش غير صورة واحدة خالص
-
-          const finalPrice = calculateFinalPrice(
-            product.base_price,
-            product.discount_type,
-            product.discount_value,
-          );
-
-          return (
-            <Link
-              href={`/product/${product.id}`}
-              key={product.id}
-              className="group block"
-            >
-              {/* Image Container */}
-              <div className="relative aspect-[3/4] overflow-hidden bg-neutral-100 mb-4">
-                {/* Main Image (Visible by default) */}
-                {mainImage ? (
-                  <img
-                    src={mainImage}
-                    alt={product.name}
-                    className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ease-in-out ${hoverImage ? "group-hover:opacity-0" : "group-hover:scale-105"}`}
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-300">
-                    No Image
-                  </div>
-                )}
-
-                {/* Hover Image (Visible ONLY on hover) */}
-                {hoverImage && (
-                  <img
-                    src={hoverImage}
-                    alt={`${product.name} alternate view`}
-                    className="absolute inset-0 w-full h-full object-cover opacity-0 group-hover:opacity-100 transition-opacity duration-700 ease-in-out group-hover:scale-105"
-                  />
-                )}
-
-                {/* Badges */}
-                <div className="absolute top-4 left-4 flex flex-col gap-2 z-20">
-                  <span className="bg-black text-white text-[8px] uppercase px-2 py-1 tracking-widest">
-                    New
-                  </span>
-                  {product.discount_value > 0 && (
-                    <span className="bg-red-600 text-white text-[8px] uppercase px-2 py-1 tracking-widest">
-                      Sale
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Product Info */}
-              <div className="space-y-1 text-left">
-                <h3 className="text-xs uppercase tracking-widest font-medium text-neutral-800">
-                  {product.name}
-                </h3>
-                <div className="flex items-center gap-3 justify-start">
-                  <p className="text-sm font-bold text-black">
-                    {finalPrice.toLocaleString()} EGP
-                  </p>
-                  {product.discount_value > 0 && (
-                    <span className="text-[11px] text-gray-400 line-through">
-                      {parseFloat(product.base_price).toLocaleString()} EGP
-                    </span>
-                  )}
-                </div>
-              </div>
-            </Link>
-          );
-        })}
+      {/* Products Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-8 mb-16">
+        {products.map((product) => (
+          <ProductCard key={product.id} product={product} />
+        ))}
       </div>
 
+      {/* Footer Section */}
       <div className="flex justify-center">
         <Link
           href="/collections"
@@ -147,6 +73,7 @@ export default function NewArrivals() {
   );
 }
 
+// Skeleton Loading
 function ArrivalsSkeleton() {
   return (
     <div

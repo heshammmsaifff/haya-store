@@ -3,20 +3,55 @@ import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import ProductCard from "@/components/ProductCard";
 import { FiSliders, FiX, FiChevronDown, FiChevronRight } from "react-icons/fi";
+import { useSearchParams } from "next/navigation";
 
 export default function CollectionPage() {
+  const searchParams = useSearchParams();
+  const categoryIdFromUrl = searchParams.get("category");
+
+  // الـ States الأساسية
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [sortBy, setSortBy] = useState("newest");
-  const [categories, setCategories] = useState([]); // ستحتوي على الأقسام وبداخلها الفرعية
-  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [categories, setCategories] = useState([]);
+  const searchQueryFromUrl = searchParams.get("search");
+
+  // التعديل هنا: امسح الـ State القديمة وسيب دي بس
+  const [selectedCategory, setSelectedCategory] = useState(
+    categoryIdFromUrl || "all",
+  );
+
   const [selectedSubCategory, setSelectedSubCategory] = useState(null);
   const [inStockOnly, setInStockOnly] = useState(false);
 
+  // ضروري تضيف الـ useEffect ده عشان لو المستخدم داس على كاتيجوري تانية وهو جوه الصفحة
+  useEffect(() => {
+    if (categoryIdFromUrl) {
+      setSelectedCategory(categoryIdFromUrl);
+      setSelectedSubCategory(null);
+    } else {
+      setSelectedCategory("all");
+    }
+  }, [categoryIdFromUrl]);
+
+  // 3. أهم خطوة: مراقبة تغير اللينك وتحديث الاختيار
+  useEffect(() => {
+    if (categoryIdFromUrl) {
+      setSelectedCategory(categoryIdFromUrl);
+      setSelectedSubCategory(null); // نصفر القسم الفرعي لو اخترنا قسم رئيسي جديد
+    }
+  }, [categoryIdFromUrl]);
+
   useEffect(() => {
     fetchData();
-  }, [selectedCategory, selectedSubCategory, sortBy, inStockOnly]);
+  }, [
+    selectedCategory,
+    selectedSubCategory,
+    sortBy,
+    inStockOnly,
+    searchQueryFromUrl,
+  ]); // أضفنا searchQueryFromUrl هنا
 
   async function fetchData() {
     setLoading(true);
@@ -32,7 +67,7 @@ export default function CollectionPage() {
         `);
       setCategories(catData || []);
 
-      // 2. بناء استعلام المنتجات
+      // 2. بناء استعلام المنتجات الأساسي
       let query = supabase.from("products").select(`
         *,
         sub_category:sub_categories!inner (
@@ -49,14 +84,19 @@ export default function CollectionPage() {
         )
       `);
 
-      // 3. تطبيق الفلترة (رئيسي أو فرعي)
+      // 3. تطبيق فلتر البحث (Search) إذا وجد في الرابط
+      if (searchQueryFromUrl) {
+        query = query.ilike("name", `%${searchQueryFromUrl}%`);
+      }
+
+      // 4. تطبيق فلترة الأقسام (فقط إذا لم يكن هناك بحث أو إذا أردت دمج البحث مع القسم)
       if (selectedSubCategory) {
         query = query.eq("sub_category_id", selectedSubCategory);
       } else if (selectedCategory !== "all") {
         query = query.eq("sub_category.category_id", selectedCategory);
       }
 
-      // 4. الترتيب
+      // 5. الترتيب
       if (sortBy === "price-low") {
         query = query.order("base_price", { ascending: true });
       } else if (sortBy === "price-high") {
@@ -68,14 +108,14 @@ export default function CollectionPage() {
       const { data, error } = await query;
       if (error) throw error;
 
-      // 5. معالجة البيانات النهائية
+      // 6. معالجة البيانات النهائية (Formatting)
       let formattedData = data.map((product) => ({
         ...product,
         category_name: product.sub_category?.category?.name || "HAYA",
         sub_category_name: product.sub_category?.name || "",
       }));
 
-      // فلترة المخزون يدوياً لضمان الدقة
+      // 7. فلترة المخزون يدوياً لضمان الدقة
       if (inStockOnly) {
         formattedData = formattedData.filter((product) =>
           product.product_variants?.some((v) => v.is_available === true),
@@ -85,6 +125,7 @@ export default function CollectionPage() {
       setProducts(formattedData);
     } catch (error) {
       console.error("Fetch Error:", error.message);
+      setProducts([]); // تأمين الحماية في حال حدوث خطأ
     } finally {
       setLoading(false);
     }
@@ -96,11 +137,13 @@ export default function CollectionPage() {
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-gray-100 pb-8">
           <div>
             <h1 className="text-4xl md:text-6xl font-light tracking-tighter uppercase mb-4">
-              {selectedSubCategory
-                ? categories
-                    .flatMap((c) => c.sub_categories)
-                    .find((s) => s.id === selectedSubCategory)?.name
-                : "All Collections"}
+              {searchQueryFromUrl
+                ? `Search: ${searchQueryFromUrl}`
+                : selectedSubCategory
+                  ? categories
+                      .flatMap((c) => c.sub_categories)
+                      .find((s) => s.id === selectedSubCategory)?.name
+                  : "All Collections"}
             </h1>
             <p className="text-gray-500 text-[10px] uppercase tracking-[0.3em]">
               Showing {products.length} Products

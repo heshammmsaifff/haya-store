@@ -43,14 +43,14 @@ export default function FeaturedCategories() {
         <h2 className="text-4xl md:text-5xl mb-10 font-light uppercase tracking-tighter text-black">
           Latest Categories
         </h2>
-        <Link className="underline text-right" href={"/collection"}>
-          show all collection
+        <Link className="underline text-right" href={"/categories"}>
+          show all categories
         </Link>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
         {categories.map((cat) => (
           <Link
-            href={`/collection?category=${cat.id}`}
+            href={`/collections?category=${cat.id}`}
             key={cat.id}
             className="group relative aspect-[4/5] overflow-hidden bg-neutral-100"
           >

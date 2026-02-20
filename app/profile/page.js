@@ -216,7 +216,7 @@ export default function ProfilePage() {
                 <div className="border border-dashed p-12 text-center text-gray-400 italic text-sm">
                   No orders found.{" "}
                   <Link
-                    href="/shop"
+                    href="/collections"
                     className="block mt-4 text-black not-italic font-bold underline"
                   >
                     Start Shopping
@@ -338,7 +338,7 @@ export default function ProfilePage() {
                     {profile?.full_name}
                   </span>
                 </div>
-                <div className="grid grid-cols-2 gap-4 border-b pb-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-b pb-4">
                   <span className="text-[10px] uppercase font-bold text-gray-400">
                     Email
                   </span>
@@ -362,6 +362,9 @@ export default function ProfilePage() {
                     </div>
                     <FiMail />
                   </button>
+                  <p className="p-3 italic text-[11px] sm:text-[15px]">
+                    *you will receive an email to reset your password
+                  </p>
                 </div>
               </div>
             </div>

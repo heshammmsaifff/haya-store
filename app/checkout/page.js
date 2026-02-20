@@ -16,7 +16,7 @@ export default function CheckoutPage() {
     city: "",
   });
 
-  const SHIPPING_FEE = 50;
+  const SHIPPING_FEE = 0;
   const totalWithShipping = cartTotal + SHIPPING_FEE;
 
   const handleSubmit = async (e) => {
@@ -135,7 +135,7 @@ export default function CheckoutPage() {
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-gray-500">Shipping</span>
-            <span>{SHIPPING_FEE.toLocaleString()} EGP</span>
+            <span>{SHIPPING_FEE.toLocaleString()} For Limited Time</span>
           </div>
           <div className="flex justify-between font-bold border-t pt-4 text-lg">
             <span>Total</span>

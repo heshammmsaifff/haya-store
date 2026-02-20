@@ -324,9 +324,9 @@ export default function AddProductPage() {
         <h1 className="text-5xl font-black italic uppercase tracking-tighter">
           HAYA ADMIN
         </h1>
-        <p className="font-bold text-gray-500 italic">
+        {/* <p className="font-bold text-gray-500 italic">
           نظام التحكم الكامل بالألوان والصور (JSON System)
-        </p>
+        </p> */}
       </header>
 
       <form
@@ -673,6 +673,16 @@ export default function AddProductPage() {
                 ? "تحديث الموديل"
                 : "نشر الموديل"}
           </button>
+
+          {editingId && !loading && (
+            <button
+              type="button"
+              onClick={resetForm}
+              className="w-full bg-gray-200 py-3 text-lg font-black border-4 border-black shadow-[4px_4px_0_0_rgba(0,0,0,1)] active:shadow-none hover:bg-red-400 transition-all"
+            >
+              إلغاء وضع التعديل (الرجوع لإضافة منتج جديد)
+            </button>
+          )}
         </div>
       </form>
 
