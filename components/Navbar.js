@@ -392,9 +392,13 @@ export default function Navbar() {
           {/* Center: Logo */}
           <div className="flex-shrink-0">
             <Link href="/">
-              <h1 className="text-xl md:text-3xl font-light tracking-[0.5em] uppercase text-black hover:opacity-60 transition-opacity">
-                HAYA
-              </h1>
+              <div className="flex items-center justify-center hover:opacity-90 transition-opacity cursor-pointer group">
+                <img
+                  src="/fav.jpg"
+                  alt="HAYA Logo"
+                  className="w-12 h-12 md:w-16 md:h-16 object-cover rounded-full shadow-sm transition-transform duration-1000 ease-in-out group-hover:rotate-[360deg]"
+                />
+              </div>
             </Link>
           </div>
 

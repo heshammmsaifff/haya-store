@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { FiInstagram, FiFacebook, FiUsers } from "react-icons/fi"; // FiUsers للجروب
+import Image from "next/image";
+import { FiInstagram, FiFacebook, FiUsers } from "react-icons/fi";
 import { FaTiktok } from "react-icons/fa";
 
 export default function Footer() {
@@ -7,9 +8,15 @@ export default function Footer() {
     <footer className="bg-white border-t border-gray-100 pt-16 pb-8 px-6 md:px-12">
       <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
         <div className="col-span-1 md:col-span-1">
-          <h2 className="text-lg font-light tracking-[0.3em] uppercase mb-6">
-            Haya Store
-          </h2>
+          <Link href="/" className="block mb-6">
+            <Image
+              src="/logo.png"
+              alt="Haya Store"
+              width={140}
+              height={50}
+              className="w-32 bg-black rounded-[45px] h-auto object-contain"
+            />
+          </Link>
           <p className="text-gray-400 text-xs leading-relaxed tracking-wider">
             Elevating your everyday wardrobe with minimalist essentials and
             timeless designs.
@@ -110,7 +117,7 @@ export default function Footer() {
 
       <div className="max-w-7xl mx-auto mt-16 pt-8 border-t border-gray-50 flex flex-col md:flex-row justify-between items-center gap-4">
         <p className="text-[9px] text-gray-400 uppercase tracking-[0.3em]">
-          &copy; {new Date().getFullYear()} HAYA STORE. All rights reserved.
+          © {new Date().getFullYear()} HAYA ALAA. All rights reserved.
         </p>
       </div>
     </footer>

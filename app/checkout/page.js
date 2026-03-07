@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { useCart } from "@/context/CartContext";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import Swal from "sweetalert2";
 
 export default function CheckoutPage() {
   const { cart, clearCart, cartTotal } = useCart();
@@ -21,19 +22,23 @@ export default function CheckoutPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (cart.length === 0) return alert("سلة المشتريات فارغة!");
+
+    if (cart.length === 0) {
+      return Swal.fire({
+        title: "Empty Cart",
+        text: "Your cart is empty! Add some items before checking out.",
+        icon: "warning",
+        confirmButtonColor: "#000",
+      });
+    }
+
     setLoading(true);
 
     try {
-      // 1. محاولة جلب بيانات المستخدم الحالي
       const {
         data: { user },
       } = await supabase.auth.getUser();
 
-      // 2. استدعاء الـ Database Function (RPC)
-      // هذه الوظيفة تقوم بتسجيل الطلب وخصم المخزون في خطوة واحدة
-      // داخل handleSubmit
-      // داخل handleSubmit في ملف page.js
       const { error } = await supabase.rpc("place_order_and_reduce_stock", {
         p_customer_name: formData.name,
         p_customer_phone: formData.phone,
@@ -42,26 +47,42 @@ export default function CheckoutPage() {
         p_total_amount: totalWithShipping,
         p_user_id: user?.id || null,
         p_items: cart.map((item) => ({
-          product_id: item.id, // تأكد ان ده هو الـ id الموجود في جدول products
+          product_id: item.id,
           color: String(item.color).trim(),
           size: String(item.size).trim(),
           quantity: parseInt(item.quantity),
         })),
       });
 
-      if (error) {
-        // إذا كان الخطأ متعلق بالمخزون (مثلاً الكمية المطلوبة أكبر من المتوفر)
-        console.error("Order Error:", error);
-        throw new Error(error.message || "حدث خطأ أثناء المحاولة");
-      }
+      if (error) throw new Error(error.message);
 
-      // 3. نجاح العملية
+      // 2. تنبيه النجاح
+      await Swal.fire({
+        title: "SUCCESS!",
+        text: "Your order has been placed successfully.",
+        icon: "success",
+        confirmButtonColor: "#000", // لون الزر أسود ليناسب التصميم
+        customClass: {
+          title: "font-light tracking-widest uppercase",
+          popup: "rounded-none", // لإعطاء شكل Sharp يناسب الـ UI الخاص بك
+        },
+      });
+
       clearCart();
-      alert("تم تسجيل طلبك بنجاح !");
       router.push("/");
     } catch (error) {
       console.error("Checkout Error:", error);
-      alert("فشل إتمام الطلب: " + error.message);
+
+      // 3. تنبيه الفشل
+      Swal.fire({
+        title: "ORDER FAILED",
+        text: error.message || "Something went wrong. Please try again.",
+        icon: "error",
+        confirmButtonColor: "#000",
+        customClass: {
+          popup: "rounded-none",
+        },
+      });
     } finally {
       setLoading(false);
     }
