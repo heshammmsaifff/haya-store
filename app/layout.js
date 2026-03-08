@@ -1,4 +1,4 @@
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -11,19 +11,46 @@ const geistSans = Geist({
 });
 
 export const metadata = {
-  title: "Haya Store",
-  description: "Haya Store | Minimalist Fashion",
+  metadataBase: new URL("https://hayaalaa.com"),
+
+  title: {
+    default: "Haya Alaa",
+    template: "%s | Haya Alaa",
+  },
+
+  description:
+    "Haya Alaa minimalist fashion store offering elegant modern clothing.",
+
+  keywords: [
+    "Haya Alaa",
+    "Minimalist fashion",
+    "Women clothing",
+    "Women fashion",
+    "هايا علاء",
+    "ملابس حريمي",
+    "موضة حريمي",
+    "فساتين حريمي",
+  ],
+
+  robots: {
+    index: true,
+    follow: true,
+  },
+
+  alternates: {
+    canonical: "https://hayaalaa.com",
+  },
+
+  themeColor: "#ffffff",
 };
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body className={`${geistSans.className} antialiased bg-white`}>
-        {/* نغلف التطبيق بالـ CartProvider ليعمل في كل الصفحات */}
         <CartProvider>
           <Toaster position="bottom-center" reverseOrder={false} />
           <Navbar />
-          {/* نضع pt-20 لتعويض ارتفاع الـ Navbar الـ Fixed */}
           <main className="min-h-screen pt-20">{children}</main>
           <Footer />
         </CartProvider>

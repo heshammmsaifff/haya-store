@@ -10,7 +10,7 @@ export default function FeaturedCategories() {
   useEffect(() => {
     async function fetchCats() {
       try {
-        const { data } = await supabase.from("categories").select("*").limit(3);
+        const { data } = await supabase.from("categories").select("*").limit(4);
 
         setCategories(data || []);
       } catch (error) {
