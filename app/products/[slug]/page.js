@@ -2,12 +2,12 @@ import ProductDetails from "./ProductDetails";
 import { supabase } from "@/lib/supabase";
 
 export async function generateMetadata({ params }) {
-  const { id } = await params;
+  const { slug } = await params;
 
   const { data: product } = await supabase
     .from("products")
-    .select("name, description, image_url")
-    .eq("id", id)
+    .select("name, description, image_url, slug")
+    .eq("slug", slug)
     .maybeSingle();
 
   if (!product) {
@@ -22,9 +22,11 @@ export async function generateMetadata({ params }) {
     description:
       product.description ||
       `Buy ${product.name} from Haya Alaa minimalist fashion store.`,
+
     openGraph: {
       title: product.name,
       description: product.description,
+      url: `https://hayaalaa.com/products/${product.slug}`,
       images: [
         {
           url: product.image_url || "/og-image.jpg",
@@ -38,12 +40,12 @@ export async function generateMetadata({ params }) {
 }
 
 export default async function Page({ params }) {
-  const { id } = await params;
+  const { slug } = await params;
 
   const { data: product } = await supabase
     .from("products")
     .select("*")
-    .eq("id", id)
+    .eq("slug", slug)
     .single();
 
   const productJsonLd = {
@@ -59,9 +61,9 @@ export default async function Page({ params }) {
     offers: {
       "@type": "Offer",
       priceCurrency: "EGP",
-      price: product.price,
+      price: product.base_price,
       availability: "https://schema.org/InStock",
-      url: `https://hayaalaa.com/products/${product.id}`,
+      url: `https://hayaalaa.com/products/${product.slug}`,
     },
   };
 

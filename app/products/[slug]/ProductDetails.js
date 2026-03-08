@@ -13,12 +13,12 @@ import {
 import { useParams } from "next/navigation";
 import { toast } from "react-hot-toast";
 
-export default function ProductDetails() {
+export default function ProductDetails({ product }) {
   const { id } = useParams();
   const { addToCart } = useCart();
-  const [product, setProduct] = useState(null);
+  // const [product, setProduct] = useState(null);
   const [variants, setVariants] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // const [loading, setLoading] = useState(true);
 
   // حالات الاختيار
   const [selectedColor, setSelectedColor] = useState(null);
@@ -26,60 +26,29 @@ export default function ProductDetails() {
   const [quantity, setQuantity] = useState(1);
   const [selectedImage, setSelectedImage] = useState(null);
 
-  useEffect(() => {
-    fetchProductData();
-  }, [id]);
-
-  async function fetchProductData() {
-    try {
-      // 1. جلب بيانات المنتج والـ variants في وقت واحد
-      const [productRes, variantsRes] = await Promise.all([
-        supabase
-          .from("products")
-          .select(`*, sub_categories(name)`)
-          .eq("id", id)
-          .single(),
-        supabase
-          .from("product_variants")
-          .select("*")
-          .eq("product_id", id)
-          .eq("is_available", true),
-      ]);
-
-      if (productRes.error) throw productRes.error;
-
-      const productData = productRes.data;
-      const variantsData = variantsRes.data || [];
-
-      // 2. معالجة الصور من الـ JSONB
-      let allPhotos = [];
-      if (productData.image_url) allPhotos.push(productData.image_url);
-      if (Array.isArray(productData.images)) {
-        productData.images.forEach((item) => {
-          if (item.urls && Array.isArray(item.urls)) {
-            allPhotos = [...allPhotos, ...item.urls];
-          }
-        });
-      }
-
-      setProduct({ ...productData, all_photos: allPhotos });
-      setVariants(variantsData);
-      setSelectedImage(
-        allPhotos[0] || "https://placehold.co/400x600?text=HAYA",
-      );
-    } catch (error) {
-      console.error("Error:", error.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   // استخراج الألوان الفريدة المتاحة
   const availableColors = Array.from(new Set(variants.map((v) => v.color))).map(
     (colorName) => {
       return variants.find((v) => v.color === colorName);
     },
   );
+
+  useEffect(() => {
+    async function fetchVariants() {
+      const { data: variantsData } = await supabase
+        .from("product_variants")
+        .select("*")
+        .eq("product_id", product.id)
+        .eq("is_available", true);
+
+      setVariants(variantsData || []);
+      setSelectedImage(
+        product.image_url || "https://placehold.co/400x600?text=HAYA",
+      );
+    }
+
+    if (product?.id) fetchVariants();
+  }, [product]);
 
   const COLOR_TRANSLATIONS = {
     أسود: "Black",
@@ -109,12 +78,12 @@ export default function ProductDetails() {
     .filter((v) => v.color === selectedColor)
     .map((v) => v.size);
 
-  if (loading)
-    return (
-      <div className="min-h-screen flex items-center justify-center tracking-[0.5em] text-[10px] uppercase">
-        HAYA Loading...
-      </div>
-    );
+  // if (loading)
+  //   return (
+  //     <div className="min-h-screen flex items-center justify-center tracking-[0.5em] text-[10px] uppercase">
+  //       HAYA Loading...
+  //     </div>
+  //   );
   if (!product)
     return (
       <div className="min-h-screen flex items-center justify-center">

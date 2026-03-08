@@ -11,7 +11,7 @@ export default async function sitemap() {
 
   const productUrls =
     products?.map((product) => ({
-      url: `${baseUrl}/products/${product.id}`,
+      url: `${baseUrl}/product/${product.slug}`,
       lastModified: product.created_at || new Date(),
     })) || [];
 

@@ -66,13 +66,16 @@ export default function ProductCard({ product }) {
       onMouseLeave={() => setIsHovered(false)}
     >
       <div className="relative aspect-[3/4] overflow-hidden bg-neutral-100 rounded-sm">
-        <Link href={`/product/${product.id}`} className="block h-full w-full">
+        <Link
+          href={`/products/${product.slug}`}
+          className="block h-full w-full"
+        >
           <img
             src={isHovered ? hoverImage : mainImage}
             alt={product.name}
             className={`w-full h-full object-cover transition-transform duration-1000 ease-out group-hover:scale-110 ${!isAvailable ? "opacity-50" : "opacity-100"}`}
             onError={(e) => {
-              e.target.onerror = null; // يمنع الحلقة اللانهائية
+              e.target.onerror = null;
               e.target.src = "https://placehold.co/400x600?text=Image+Error";
             }}
           />
@@ -100,7 +103,7 @@ export default function ProductCard({ product }) {
             <p className="text-[8px] md:text-[10px] text-gray-400 uppercase tracking-widest mb-1">
               {product.category_name || product.sub_category?.name || "HAYA"}
             </p>
-            <Link href={`/product/${product.id}`}>
+            <Link href={`/product/${product.slug}`}>
               <h3 className="text-[11px] md:text-[13px] font-medium uppercase tracking-tight text-black line-clamp-1 group-hover:underline">
                 {product.name}
               </h3>
