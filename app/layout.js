@@ -41,6 +41,30 @@ export const metadata = {
     canonical: "https://hayaalaa.com",
   },
 
+  openGraph: {
+    title: "Haya Alaa",
+    description: "Minimalist women fashion store.",
+    url: "https://hayaalaa.com",
+    siteName: "Haya Alaa",
+    images: [
+      {
+        url: "/og-image.jpg",
+        width: 1200,
+        height: 630,
+        alt: "Haya Alaa Fashion",
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
+
+  twitter: {
+    card: "summary_large_image",
+    title: "Haya Alaa",
+    description: "Minimalist women fashion store.",
+    images: ["/og-image.jpg"],
+  },
+
   themeColor: "#ffffff",
 };
 
