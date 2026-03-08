@@ -7,13 +7,15 @@ export default async function sitemap() {
 
   const { data: products } = await supabase
     .from("products")
-    .select("id, created_at");
+    .select("slug, created_at");
 
   const productUrls =
-    products?.map((product) => ({
-      url: `${baseUrl}/product/${product.slug}`,
-      lastModified: product.created_at || new Date(),
-    })) || [];
+    products
+      ?.filter((product) => product.slug)
+      .map((product) => ({
+        url: `${baseUrl}/products/${product.slug}`,
+        lastModified: product.created_at || new Date(),
+      })) || [];
 
   return [
     {
