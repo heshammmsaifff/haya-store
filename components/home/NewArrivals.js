@@ -40,6 +40,36 @@ export default function NewArrivals() {
 
   if (loading) return <ArrivalsSkeleton />;
 
+  if (products.length === 0) {
+    return (
+      <section className="py-24 px-6 md:px-12 max-w-[1800px] mx-auto">
+        <h2 className="text-4xl md:text-5xl mb-10 font-light uppercase tracking-tighter text-black">
+          Latest Categories
+        </h2>
+        <div className="flex flex-col items-center justify-center py-24 gap-4 text-neutral-400">
+          {/* <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="w-12 h-12"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={1}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z"
+            />
+          </svg> */}
+          <p className="text-sm uppercase tracking-[0.3em]">Stay Tuned</p>
+          <p className="text-xs tracking-widest text-neutral-300">
+            New Products coming soon
+          </p>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="py-20 px-6 md:px-12 bg-white text-left" dir="ltr">
       {/* Header Section */}
